@@ -3,6 +3,7 @@ import sounddevice as sd
 import soundcard as sc
 import soundfile as sf
 import numpy as np
+import os
 import threading
 import shutil
 import subprocess
@@ -28,8 +29,8 @@ log = logging.getLogger("recorder")
 logging.captureWarnings(True)
 logging.getLogger("py.warnings").setLevel(logging.WARNING)
 
-RECORDING_DIR = Path(r"C:\Users\tobias.mueller\Aufnahmen\Recording")
-TARGET_DIR = Path(r"C:\Users\tobias.mueller\OneDrive - Seven2one Informationssysteme GmbH\Aufnahmen\Input")
+RECORDING_DIR = Path(os.environ.get("BACKREC_RECORDING_DIR", Path.home() / "Backrec" / "Recording"))
+TARGET_DIR = Path(os.environ.get("BACKREC_TARGET_DIR", Path.home() / "Backrec" / "Output"))
 RECORDING_DIR.mkdir(parents=True, exist_ok=True)
 TARGET_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -412,7 +413,7 @@ class RecorderApp(ctk.CTk):
         super().__init__()
         log.info("=== Recorder UI gestartet ===")
 
-        self.title("REC")
+        self.title("Backrec")
         self.geometry("280x160")
         self.resizable(False, False)
         self.attributes("-topmost", True)

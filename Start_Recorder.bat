@@ -1,11 +1,11 @@
 @echo off
-title Dual-Audio Recorder
+title Backrec
 
 :: Wechselt in den Ordner, in dem diese .bat Datei liegt
 cd /d "%~dp0"
 
 echo ==========================================
-echo Dual-Audio Recorder wird gestartet...
+echo Backrec wird gestartet...
 echo ==========================================
 
 :: 1. Prüfen ob .venv existiert, wenn nicht: erstellen
