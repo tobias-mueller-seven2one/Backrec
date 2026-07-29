@@ -25,3 +25,6 @@ wheels/
 *.swo
 *~
 .DS_Store
+
+# Local environment configuration (contains machine-specific paths)
+.env

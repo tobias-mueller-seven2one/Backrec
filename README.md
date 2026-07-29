@@ -39,14 +39,19 @@ pythonw main.pyw
 
 ## Configuration
 
-Backrec writes files to two folders, configurable via environment variables:
+Backrec writes files to two folders, configurable via environment variables. The easiest way to set them is via a local `.env` file (not committed to git):
+
+```powershell
+copy .env.example .env
+notepad .env
+```
 
 | Variable | Purpose | Default |
 | --- | --- | --- |
 | `BACKREC_RECORDING_DIR` | Where raw/merged recordings are written during/after recording | `%USERPROFILE%\Backrec\Recording` |
 | `BACKREC_TARGET_DIR` | Where the final merged (or raw fallback) file is copied to | `%USERPROFILE%\Backrec\Output` |
 
-Set them before starting the app, e.g. in PowerShell:
+Alternatively, set them as regular environment variables before starting the app, e.g. in PowerShell:
 
 ```powershell
 $env:BACKREC_RECORDING_DIR = "D:\Recordings\Raw"
