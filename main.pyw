@@ -29,7 +29,7 @@ logging.captureWarnings(True)
 logging.getLogger("py.warnings").setLevel(logging.WARNING)
 
 RECORDING_DIR = Path(r"C:\Users\tobias.mueller\Aufnahmen\Recording")
-TARGET_DIR = Path(r"C:\Users\tobias.mueller\OneDrive - Seven2one Informationssysteme GmbH\Aufnahmen")
+TARGET_DIR = Path(r"C:\Users\tobias.mueller\OneDrive - Seven2one Informationssysteme GmbH\Aufnahmen\Input")
 RECORDING_DIR.mkdir(parents=True, exist_ok=True)
 TARGET_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -57,13 +57,15 @@ DOT_ON     = "#d9d9d9"
 DOT_OFF    = "#4a4a4a"
 MUTE_COLOR = "#8a4b4b"
 
+LABEL_MAX_LEN = 32
+
 EDataFlow_eRender = 0
 EDataFlow_eCapture = 1
 ERole_eMultimedia = 1
 ERole_eCommunications = 2
 
 
-def short_label(name: str, max_len: int = 18) -> str:
+def short_label(name: str, max_len: int = LABEL_MAX_LEN) -> str:
     cleaned = " ".join(str(name).split())
     if not cleaned:
         return "unknown"
@@ -169,12 +171,12 @@ def get_default_speaker_device_name(retries=3, retry_delay=0.05):
         try:
             enumerator = AudioUtilities.GetDeviceEnumerator()
             endpoint = enumerator.GetDefaultAudioEndpoint(
-                EDataFlow_eRender, ERole_eMultimedia
+                EDataFlow_eRender, ERole_eCommunications
             )
             device = AudioUtilities.CreateDevice(endpoint)
             name = device.FriendlyName
             if name:
-                log.debug(f"[SYS] pycaw meldet Default-Wiedergabegeraet: {name}")
+                log.debug(f"[SYS] pycaw meldet Default-Wiedergabegeraet (Kommunikation): {name}")
                 return name
             log.warning(
                 f"[SYS] pycaw lieferte kein FriendlyName fuer Default-Wiedergabegeraet "
@@ -434,7 +436,7 @@ class RecorderApp(ctk.CTk):
         self.mic_level_dot.pack(side="left")
 
         self.mic_level_label = ctk.CTkLabel(
-            mic_row, text=short_label("mic in", 18),
+            mic_row, text=short_label("mic in", LABEL_MAX_LEN),
             font=("Segoe UI", 10), text_color=TEXT_MUTED, anchor="w"
         )
         self.mic_level_label.pack(side="left", padx=(4, 0))
@@ -450,7 +452,7 @@ class RecorderApp(ctk.CTk):
         self.sys_level_dot.pack(side="left")
 
         self.sys_level_label = ctk.CTkLabel(
-            sys_row, text=short_label("system out", 18),
+            sys_row, text=short_label("system out", LABEL_MAX_LEN),
             font=("Segoe UI", 10), text_color=TEXT_MUTED, anchor="w"
         )
         self.sys_level_label.pack(side="left", padx=(4, 0))
@@ -620,7 +622,7 @@ class RecorderApp(ctk.CTk):
             log.error(f"[MERGE] System-Datei fehlt oder zu klein: {sys_src}")
             return self._fallback_copy_raw()
 
-        merged_path = RECORDING_DIR / f"merged_{self._timestamp}.wav"
+        merged_path = RECORDING_DIR / f"{self._timestamp}.wav"
         ok, stderr = merge_audio_files(mic_src, sys_src, merged_path)
 
         if not ok:
@@ -715,10 +717,10 @@ class RecorderApp(ctk.CTk):
         if self._recording and self.mic_recorder is not None:
             peak = self.mic_recorder.last_peak
             active = peak > 0.02 and not self._mic_muted
-            name = short_label(self.mic_recorder.current_device_name or "mic in", 18)
+            name = short_label(self.mic_recorder.current_device_name or "mic in", LABEL_MAX_LEN)
         else:
             active = False
-            name = short_label(self._idle_mic_name or "mic in", 18)
+            name = short_label(self._idle_mic_name or "mic in", LABEL_MAX_LEN)
 
         if self._mic_muted:
             self.mic_level_dot.configure(text_color=MUTE_COLOR)
@@ -730,10 +732,10 @@ class RecorderApp(ctk.CTk):
         if self._recording and self.system_recorder is not None:
             peak = self.system_recorder.last_peak
             active = peak > 0.02 and not self._sys_muted
-            name = short_label(self.system_recorder.current_device_name or "system out", 18)
+            name = short_label(self.system_recorder.current_device_name or "system out", LABEL_MAX_LEN)
         else:
             active = False
-            name = short_label(self._idle_sys_name or "system out", 18)
+            name = short_label(self._idle_sys_name or "system out", LABEL_MAX_LEN)
 
         if self._sys_muted:
             self.sys_level_dot.configure(text_color=MUTE_COLOR)
