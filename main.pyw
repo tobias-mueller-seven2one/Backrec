@@ -50,6 +50,19 @@ MERGE_CHANNELS = 1
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
+# Keep the process DPI-unaware so CustomTkinter's ScalingTracker never rescales
+# widgets when the resolution, the monitor or the display scaling changes.
+# Windows then scales the whole window instead, which keeps the layout
+# pixel-stable (at the cost of slight blur above 100% display scaling).
+# Must run before the CTk window is created (its constructor calls
+# ScalingTracker.activate_high_dpi_awareness()).
+ctk.deactivate_automatic_dpi_awareness()
+ctk.set_widget_scaling(1.0)
+ctk.set_window_scaling(1.0)
+
+WINDOW_WIDTH = 280
+WINDOW_MIN_HEIGHT = 160
+
 BG         = "#111111"
 BORDER     = "#2a2a2a"
 TEXT       = "#e0e0e0"
@@ -62,6 +75,8 @@ DOT_OFF    = "#4a4a4a"
 MUTE_COLOR = "#8a4b4b"
 
 LABEL_MAX_LEN = 32
+DISCARD_ICON = "✕"
+DISCARD_CONFIRM_MS = 3000
 
 EDataFlow_eRender = 0
 EDataFlow_eCapture = 1
@@ -417,24 +432,32 @@ class RecorderApp(ctk.CTk):
         log.info("=== Recorder UI gestartet ===")
 
         self.title("Backrec")
-        self.geometry("280x160")
-        self.resizable(False, False)
         self.attributes("-topmost", True)
         self.configure(fg_color=BG)
+        self._fixed_size: tuple[int, int] | None = None
 
         self.mic_recorder = None
         self.system_recorder = None
         self._busy = False
         self._recording = False
 
+        # The button row is packed first and anchored to the bottom, so the pack
+        # manager assigns it space before anything else. Even if the remaining
+        # rows ever grow, the buttons can no longer be pushed out of the window.
+        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        btn_frame.pack(side="bottom", fill="x", padx=12, pady=(8, 12))
+        btn_frame.columnconfigure(0, weight=1)
+        btn_frame.columnconfigure(1, weight=1)
+        btn_frame.columnconfigure(2, weight=0, minsize=34)
+
         self.status_label = ctk.CTkLabel(
             self, text="○ ready", font=("Segoe UI", 11),
             text_color=TEXT_MUTED, anchor="w"
         )
-        self.status_label.pack(fill="x", padx=14, pady=(12, 0))
+        self.status_label.pack(side="top", fill="x", padx=14, pady=(12, 0))
 
         mic_row = ctk.CTkFrame(self, fg_color="transparent")
-        mic_row.pack(fill="x", padx=14, pady=(4, 0))
+        mic_row.pack(side="top", fill="x", padx=14, pady=(4, 0))
 
         self.mic_level_dot = ctk.CTkLabel(mic_row, text="●", width=14, font=("Segoe UI", 11), text_color=DOT_OFF)
         self.mic_level_dot.pack(side="left")
@@ -450,7 +473,7 @@ class RecorderApp(ctk.CTk):
             widget.configure(cursor="hand2")
 
         sys_row = ctk.CTkFrame(self, fg_color="transparent")
-        sys_row.pack(fill="x", padx=14, pady=(2, 0))
+        sys_row.pack(side="top", fill="x", padx=14, pady=(2, 0))
 
         self.sys_level_dot = ctk.CTkLabel(sys_row, text="●", width=14, font=("Segoe UI", 11), text_color=DOT_OFF)
         self.sys_level_dot.pack(side="left")
@@ -464,11 +487,6 @@ class RecorderApp(ctk.CTk):
         for widget in (self.sys_level_dot, self.sys_level_label):
             widget.bind("<Button-1>", self._toggle_sys_mute)
             widget.configure(cursor="hand2")
-
-        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=12, pady=(8, 12))
-        btn_frame.columnconfigure(0, weight=1)
-        btn_frame.columnconfigure(1, weight=1)
 
         self.btn_start = ctk.CTkButton(
             btn_frame, text="REC", font=("Segoe UI", 12, "bold"),
@@ -486,17 +504,65 @@ class RecorderApp(ctk.CTk):
         )
         self.btn_stop.grid(row=0, column=1, padx=(4, 0), sticky="ew")
 
+        self.btn_discard = ctk.CTkButton(
+            btn_frame, text=DISCARD_ICON, font=("Segoe UI", 13, "bold"),
+            fg_color=BTN_IDLE, hover_color=BTN_HOVER, text_color=TEXT_MUTED,
+            border_width=1, border_color=BORDER, corner_radius=4,
+            height=34, width=34,
+            state="disabled", command=self.discard_recording
+        )
+        self.btn_discard.grid(row=0, column=2, padx=(4, 0), sticky="ew")
+
         self._mic_filepath = None
         self._system_filepath = None
         self._timestamp = None
         self._mic_muted = False
         self._sys_muted = False
+        self._discard_armed = False
+        self._discard_disarm_job = None
 
         self._idle_mic_name = None
         self._idle_sys_name = None
         threading.Thread(target=self._idle_device_poll_loop, daemon=True).start()
 
+        self._lock_window_size()
         self._poll_ui_loop()
+
+    def _lock_window_size(self) -> None:
+        """Pin the window to the height its layout actually requires.
+
+        Deriving the height from the content instead of hard-coding it means the
+        button row is always inside the window. minsize/maxsize are set through
+        the CTk API so CustomTkinter keeps valid bounds to restore.
+        """
+        self.update_idletasks()
+        height = max(self.winfo_reqheight(), WINDOW_MIN_HEIGHT)
+        self._fixed_size = (WINDOW_WIDTH, height)
+
+        self.minsize(WINDOW_WIDTH, height)
+        self.maxsize(WINDOW_WIDTH, height)
+        self.geometry(f"{WINDOW_WIDTH}x{height}")
+        self.resizable(False, False)
+        log.info(f"Fenstergroesse fixiert: {WINDOW_WIDTH}x{height}")
+
+    def _enforce_window_size(self) -> None:
+        """Safety net: restore the pinned geometry if anything shrank the window."""
+        if self._fixed_size is None:
+            return
+        if not self.winfo_viewable():
+            return
+
+        width, height = self._fixed_size
+        if self.winfo_width() >= width and self.winfo_height() >= height:
+            return
+
+        log.warning(
+            f"Fenstergroesse abgewichen ({self.winfo_width()}x{self.winfo_height()}), "
+            f"stelle {width}x{height} wieder her"
+        )
+        self.minsize(width, height)
+        self.maxsize(width, height)
+        self.geometry(f"{width}x{height}")
 
     def _idle_device_poll_loop(self):
         if PYCAW_AVAILABLE:
@@ -527,6 +593,7 @@ class RecorderApp(ctk.CTk):
         self._busy = True
         self.btn_start.configure(state="disabled", text_color=TEXT_MUTED)
         self.btn_stop.configure(state="disabled", text_color=TEXT_MUTED)
+        self.btn_discard.configure(state="disabled", text_color=TEXT_MUTED, fg_color=BTN_IDLE)
         self._animate_dots(base_text)
 
     def _animate_dots(self, base: str, step: int = 0):
@@ -590,6 +657,7 @@ class RecorderApp(ctk.CTk):
             log.debug("stop_recording() ignoriert (busy oder nicht aktiv)")
             return
         log.info(">>> STOP gedrueckt")
+        self._disarm_discard()
         self._set_busy("stopping")
         threading.Thread(target=self._do_stop, daemon=True).start()
 
@@ -690,6 +758,78 @@ class RecorderApp(ctk.CTk):
         log.info(f"Status final: {message}")
         self.after(2500, self._refresh_status)
 
+    # --- Discard: stop threads, close files, delete raw takes without saving ---
+    def discard_recording(self):
+        """Two-stage guard: first click arms the button, second click within
+        DISCARD_CONFIRM_MS actually drops the take."""
+        if self._busy or not self._recording:
+            log.debug("discard_recording() ignoriert (busy oder nicht aktiv)")
+            return
+
+        if not self._discard_armed:
+            self._arm_discard()
+            return
+
+        self._disarm_discard()
+        log.info(">>> DISCARD bestaetigt")
+        self._set_busy("discarding")
+        threading.Thread(target=self._do_discard, daemon=True).start()
+
+    def _arm_discard(self) -> None:
+        self._discard_armed = True
+        log.info("UI: Discard bewaffnet, wartet auf Bestaetigung")
+        self._discard_disarm_job = self.after(DISCARD_CONFIRM_MS, self._disarm_discard)
+        self._refresh_status()
+
+    def _disarm_discard(self) -> None:
+        if self._discard_disarm_job is not None:
+            self.after_cancel(self._discard_disarm_job)
+            self._discard_disarm_job = None
+        if not self._discard_armed:
+            return
+        self._discard_armed = False
+        log.debug("UI: Discard entschaerft")
+
+    def _do_discard(self) -> None:
+        try:
+            if self.mic_recorder is not None:
+                self.mic_recorder.stop(timeout=5)
+            if self.system_recorder is not None:
+                self.system_recorder.stop(timeout=5)
+
+            if self.mic_recorder is not None:
+                self.mic_recorder.close_file()
+            if self.system_recorder is not None:
+                self.system_recorder.close_file()
+
+            self._recording = False
+            deleted = self._delete_raw_files()
+            message = "discarded" if deleted else "discarded (cleanup failed)"
+
+        except Exception:
+            message = "discard error"
+            log.error("Unerwarteter Fehler in _do_discard()", exc_info=True)
+
+        self.after(0, lambda: self._finish_stop(message))
+
+    def _delete_raw_files(self) -> bool:
+        """Remove the raw takes from RECORDING_DIR. Nothing is copied to TARGET_DIR."""
+        all_removed = True
+        for prefix, path in (("MIC", self._mic_filepath), ("SYS", self._system_filepath)):
+            if path is None:
+                continue
+            try:
+                path.unlink(missing_ok=True)
+                log.info(f"[{prefix}] Rohdatei verworfen: {path}")
+            except Exception:
+                all_removed = False
+                log.error(f"[{prefix}] Rohdatei konnte nicht geloescht werden: {path}", exc_info=True)
+
+        self._mic_filepath = None
+        self._system_filepath = None
+        self._timestamp = None
+        return all_removed
+
     def _refresh_status(self):
         if self._busy:
             return
@@ -697,7 +837,9 @@ class RecorderApp(ctk.CTk):
             switching_mic = bool(self.mic_recorder and self.mic_recorder.is_switching)
             switching_sys = bool(self.system_recorder and self.system_recorder.is_switching)
 
-            if switching_mic and switching_sys:
+            if self._discard_armed:
+                text = f"{DISCARD_ICON} discard? confirm"
+            elif switching_mic and switching_sys:
                 text = "● switching..."
             elif switching_mic:
                 text = "● switching mic..."
@@ -706,15 +848,24 @@ class RecorderApp(ctk.CTk):
             else:
                 text = "● recording"
 
-            self.status_label.configure(text=text, text_color=RED if text == "● recording" else TEXT_MUTED)
+            highlighted = text in ("● recording", f"{DISCARD_ICON} discard? confirm")
+            self.status_label.configure(text=text, text_color=RED if highlighted else TEXT_MUTED)
             self.btn_start.configure(state="disabled", text_color=TEXT_MUTED)
             self.btn_stop.configure(state="normal", text_color=TEXT)
+            self.btn_discard.configure(
+                state="normal",
+                text_color=TEXT if self._discard_armed else TEXT_MUTED,
+                fg_color=RED if self._discard_armed else BTN_IDLE,
+            )
         else:
             self.status_label.configure(text="○ ready", text_color=TEXT_MUTED)
             self.btn_start.configure(state="normal", text_color=TEXT)
             self.btn_stop.configure(state="disabled", text_color=TEXT_MUTED)
+            self.btn_discard.configure(state="disabled", text_color=TEXT_MUTED, fg_color=BTN_IDLE)
 
     def _poll_ui_loop(self):
+        self._enforce_window_size()
+
         if not self._busy:
             self._refresh_status()
 
