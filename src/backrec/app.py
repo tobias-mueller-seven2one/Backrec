@@ -15,12 +15,13 @@ from __future__ import annotations
 import sys
 import threading
 import time
+import tkinter as tk
 from datetime import datetime
 from pathlib import Path
 
 import customtkinter as ctk
 
-from . import instance, paths, preflight
+from . import control, instance, paths, preflight
 from .delivery import Outcome, discard as discard_takes, finish as finish_recording
 from .devices import PYCAW_AVAILABLE, get_default_comm_device_name, get_default_speaker_device_name
 from .logging_setup import bootstrap, get_logger
@@ -51,6 +52,26 @@ DISCARD_CONFIRM_MS = 3000
 
 UI_POLL_MS = 150
 
+# The one place for everything a tray menu would carry (design D20). A button,
+# not a menu bar: the window is 280 px wide and defends that width, and every
+# visible element would come out of the recording controls - which are what the
+# window is for.
+GEAR_ICON = "⚙"
+GEAR_TOOLTIP = "Menü: Aktualisieren, Diagnose, Logs öffnen, Info"
+
+MENU_UPDATE = "Aktualisieren…"
+MENU_DOCTOR = "Diagnose"
+MENU_LOGS = "Logs öffnen"
+MENU_ABOUT = "Info"
+
+# Why an entry is greyed out has to be readable, so the reason travels in the
+# label itself - a menu has no second line for it.
+RECORDING_SUFFIX = " (während der Aufnahme gesperrt)"
+
+# Long enough for the closing line to be read, short enough that a stop from
+# outside does not run into its own deadline.
+EXIT_DELAY_MS = 900
+
 
 def short_label(name: str, max_len: int = LABEL_MAX_LEN) -> str:
     cleaned = " ".join(str(name).split())
@@ -59,6 +80,17 @@ def short_label(name: str, max_len: int = LABEL_MAX_LEN) -> str:
     if len(cleaned) <= max_len:
         return cleaned
     return cleaned[:max_len - 1].rstrip() + "…"
+
+
+def menu_entry(label: str, recording: bool) -> tuple[str, str]:
+    """Label and state of a menu entry a running recording rules out.
+
+    The reason travels inside the label because a menu has no second line for
+    it, and an entry that is simply grey tells the reader nothing (design D20).
+    """
+    if not recording:
+        return label, "normal"
+    return f"{label}{RECORDING_SUFFIX}", "disabled"
 
 
 def configure_appearance() -> None:
@@ -103,11 +135,23 @@ class RecorderApp(ctk.CTk):
         btn_frame.columnconfigure(1, weight=1)
         btn_frame.columnconfigure(2, weight=0, minsize=34)
 
+        header = ctk.CTkFrame(self, fg_color="transparent")
+        header.pack(side="top", fill="x", padx=14, pady=(12, 0))
+
         self.status_label = ctk.CTkLabel(
-            self, text="○ ready", font=("Segoe UI", 11),
+            header, text="○ ready", font=("Segoe UI", 11),
             text_color=TEXT_MUTED, anchor="w"
         )
-        self.status_label.pack(side="top", fill="x", padx=14, pady=(12, 0))
+        self.status_label.pack(side="left", fill="x", expand=True)
+
+        self.menu_button = ctk.CTkButton(
+            header, text=GEAR_ICON, font=("Segoe UI", 12),
+            fg_color=BTN_IDLE, hover_color=BTN_HOVER, text_color=TEXT_MUTED,
+            border_width=0, corner_radius=4, width=24, height=20,
+            command=self._open_menu
+        )
+        self.menu_button.pack(side="right", padx=(6, 0))
+        self._install_tooltip(self.menu_button, GEAR_TOOLTIP)
 
         mic_row = ctk.CTkFrame(self, fg_color="transparent")
         mic_row.pack(side="top", fill="x", padx=14, pady=(4, 0))
@@ -176,10 +220,187 @@ class RecorderApp(ctk.CTk):
 
         self._idle_mic_name = None
         self._idle_sys_name = None
+
+        self._closing = False
+        self._menu_busy = False
+        self._silent_failures = False
+        self._tooltip: ctk.CTkToplevel | None = None
+        self._build_menu()
+
+        # Without this the window X kills the process and takes the daemon
+        # threads with it: the closing sequence never runs and a recording in
+        # progress is gone (design D7).
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+
         threading.Thread(target=self._idle_device_poll_loop, daemon=True).start()
 
         self._lock_window_size()
         self._poll_ui_loop()
+
+    # --- The gear menu ------------------------------------------------------
+
+    def _install_tooltip(self, widget, text: str) -> None:
+        """A gear without a label is not self-explanatory for this audience."""
+
+        def show(_event=None) -> None:
+            if self._tooltip is not None:
+                return
+            tip = ctk.CTkToplevel(self)
+            tip.overrideredirect(True)
+            tip.attributes("-topmost", True)
+            ctk.CTkLabel(
+                tip, text=text, font=("Segoe UI", 9), text_color=TEXT,
+                fg_color=BTN_IDLE, corner_radius=4, padx=6, pady=2,
+            ).pack()
+            tip.geometry(f"+{widget.winfo_rootx() - 150}+{widget.winfo_rooty() + 24}")
+            self._tooltip = tip
+
+        def hide(_event=None) -> None:
+            if self._tooltip is not None:
+                self._tooltip.destroy()
+                self._tooltip = None
+
+        widget.bind("<Enter>", show)
+        widget.bind("<Leave>", hide)
+
+    def _build_menu(self) -> None:
+        self._menu = tk.Menu(self, tearoff=0)
+        self._menu.add_command(label=MENU_UPDATE, command=self._menu_update)
+        self._menu.add_command(label=MENU_DOCTOR, command=self._menu_doctor)
+        self._menu.add_command(label=MENU_LOGS, command=self._menu_logs)
+        self._menu.add_command(label=MENU_ABOUT, command=self._menu_about)
+
+    def _open_menu(self) -> None:
+        """Opens the menu, with the two entries a recording rules out greyed out."""
+        if self._menu_busy or self._closing:
+            log.debug("Menue ignoriert (ein Vorgang laeuft)")
+            return
+
+        for index, label in ((0, MENU_UPDATE), (1, MENU_DOCTOR)):
+            text, state = menu_entry(label, self._recording)
+            self._menu.entryconfigure(index, state=state, label=text)
+
+        try:
+            self._menu.tk_popup(
+                self.menu_button.winfo_rootx(),
+                self.menu_button.winfo_rooty() + self.menu_button.winfo_height(),
+            )
+        finally:
+            self._menu.grab_release()
+
+    def _in_background(self, label: str, work) -> None:
+        """Runs a long menu action with the menu locked and the window talking."""
+        if self._menu_busy:
+            return
+
+        self._menu_busy = True
+        self.menu_button.configure(state="disabled")
+        previous = self.status_label.cget("text")
+        self.status_label.configure(text=label, text_color=TEXT_MUTED)
+
+        def run() -> None:
+            try:
+                work()
+            except Exception:  # noqa: BLE001 - a menu action must not end the window
+                log.error("Menuepunkt '%s' fehlgeschlagen", label, exc_info=True)
+            finally:
+                self.after(0, lambda: self._release_menu(previous))
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def _release_menu(self, previous: str) -> None:
+        self._menu_busy = False
+        self.menu_button.configure(state="normal")
+        if not self._busy:
+            self._refresh_status()
+        else:
+            self.status_label.configure(text=previous)
+
+    def _menu_update(self) -> None:
+        log.info("Menue: %s", MENU_UPDATE)
+        from tkinter import filedialog, messagebox
+
+        archive = filedialog.askopenfilename(
+            parent=self,
+            title="Neue Fassung auswählen",
+            filetypes=[("Archiv", "*.zip")],
+        )
+        if not archive:
+            log.info("Menue: Aktualisieren abgebrochen, keine Datei gewaehlt")
+            return
+
+        def work() -> None:
+            result = control.apply_archive(Path(archive))
+            self.after(
+                0,
+                lambda: messagebox.showinfo(
+                    f"{paths.TOOL_NAME}: Aktualisieren", "\n".join(result.lines), parent=self
+                ),
+            )
+            if result.ok:
+                self.after(EXIT_DELAY_MS, self._finalize_exit)
+
+        self._in_background("updating", work)
+
+    def _menu_doctor(self) -> None:
+        log.info("Menue: %s", MENU_DOCTOR)
+
+        def work() -> None:
+            # Writing and opening the report is the only effect a diagnosis has;
+            # it changes neither the state nor the display (design D21).
+            control.run_doctor(report=True, open_report=True)
+
+        self._in_background("checking", work)
+
+    def _menu_logs(self) -> None:
+        log.info("Menue: %s", MENU_LOGS)
+        result = control.open_logs()
+        if not result.ok:
+            log.warning("Aufzeichnungsordner liess sich nicht oeffnen: %s", " ".join(result.lines))
+
+    def _menu_about(self) -> None:
+        log.info("Menue: %s", MENU_ABOUT)
+        from tkinter import messagebox
+
+        messagebox.showinfo(
+            f"{paths.TOOL_NAME}: Info", "\n".join(control.about_lines()), parent=self
+        )
+
+    # --- Ending -------------------------------------------------------------
+
+    def _on_close(self) -> None:
+        """The window X. Never loses a recording (design D7).
+
+        No question is asked. The window already has a two-stage button for
+        discarding; whoever closes the window does not want to throw the
+        recording away, and a dialog that asks the obvious gets confirmed
+        unread after the third time.
+        """
+        self._request_shutdown("Fenster geschlossen", silent=False)
+
+    def _request_shutdown(self, reason: str, *, silent: bool) -> None:
+        if self._closing:
+            log.debug("Zweites Beenden verworfen, der Abschluss laeuft bereits")
+            return
+
+        self._closing = True
+        self._silent_failures = silent
+        log.info(">>> Beenden: %s", reason)
+
+        if not self._recording:
+            self._finalize_exit()
+            return
+
+        self._disarm_discard()
+        self._set_busy("finishing")
+        threading.Thread(target=lambda: self._do_stop(then_exit=True), daemon=True).start()
+
+    def _finalize_exit(self) -> None:
+        log.info("=== Recorder UI beendet ===")
+        try:
+            self.destroy()
+        except Exception:  # noqa: BLE001 - a window already gone is the wanted outcome
+            log.debug("Fenster war bereits geschlossen", exc_info=True)
 
     def _lock_window_size(self) -> None:
         """Pin the window to the height its layout actually requires.
@@ -291,6 +512,9 @@ class RecorderApp(ctk.CTk):
             self._system_filepath = system_filepath
             self._timestamp = timestamp
             self._recording = True
+            # Noted in the state folder so `status` can answer the question from
+            # another process entirely.
+            instance.mark_recording()
             log.info(f"Aufnahme erfolgreich gestartet: {mic_filepath}, {system_filepath}")
         except Exception:
             self.mic_recorder = None
@@ -314,7 +538,7 @@ class RecorderApp(ctk.CTk):
         self._set_busy("stopping")
         threading.Thread(target=self._do_stop, daemon=True).start()
 
-    def _do_stop(self):
+    def _do_stop(self, then_exit: bool = False):
         try:
             if self.mic_recorder is not None:
                 self.mic_recorder.stop(timeout=5)
@@ -327,13 +551,16 @@ class RecorderApp(ctk.CTk):
                 self.system_recorder.close_file()
 
             self._recording = False
+            instance.clear_recording()
             message = self._merge_and_save()
 
         except Exception:
             message = "stop error"
+            self._recording = False
+            instance.clear_recording()
             log.error("Unerwarteter Fehler in _do_stop()", exc_info=True)
 
-        self.after(0, lambda: self._finish_stop(message))
+        self.after(0, lambda: self._finish_stop(message, then_exit=then_exit))
 
     def _merge_and_save(self) -> str:
         """Hands the recording over and shows a failure where it can be seen."""
@@ -345,11 +572,13 @@ class RecorderApp(ctk.CTk):
             self.target_dir,
         )
 
-        if not outcome.ok:
+        if not outcome.ok and not self._silent_failures:
             # The status line is 280 px wide and carries neither the cause nor a
             # folder. Without this dialog the failure would exist only in a log
             # nobody opens - and the takes that could still be rescued would go
-            # unnoticed.
+            # unnoticed. Suppressed for a stop from outside: nobody is sitting
+            # in front of the window then, and a modal dialog would hold the
+            # process until its deadline runs out.
             self.after(0, lambda: self._report_failure(outcome))
 
         return outcome.status
@@ -365,11 +594,16 @@ class RecorderApp(ctk.CTk):
             parent=self,
         )
 
-    def _finish_stop(self, message: str):
+    def _finish_stop(self, message: str, then_exit: bool = False):
         self._busy = False
         self._refresh_status()
         self.status_label.configure(text=message, text_color=TEXT_MUTED)
         log.info(f"Status final: {message}")
+
+        if then_exit:
+            self.after(EXIT_DELAY_MS, self._finalize_exit)
+            return
+
         self.after(2500, self._refresh_status)
 
     # --- Discard: stop threads, close files, delete raw takes without saving ---
@@ -417,11 +651,14 @@ class RecorderApp(ctk.CTk):
                 self.system_recorder.close_file()
 
             self._recording = False
+            instance.clear_recording()
             deleted = self._delete_raw_files()
             message = "discarded" if deleted else "discarded (cleanup failed)"
 
         except Exception:
             message = "discard error"
+            self._recording = False
+            instance.clear_recording()
             log.error("Unerwarteter Fehler in _do_discard()", exc_info=True)
 
         self.after(0, lambda: self._finish_stop(message))
@@ -470,6 +707,13 @@ class RecorderApp(ctk.CTk):
 
     def _poll_ui_loop(self):
         self._enforce_window_size()
+
+        # The loop that already defends the window geometry is the only clock
+        # this application has, so the stop request rides along in it rather
+        # than getting a timer of its own (design D10). Console signals never
+        # reach a windowless process, which is why the request is a file.
+        if not self._closing and instance.stop_requested():
+            self._request_shutdown("von außen angefordert", silent=True)
 
         if not self._busy:
             self._refresh_status()
@@ -565,6 +809,7 @@ def main() -> int:
     finally:
         instance.clear_record()
         instance.clear_stop_request()
+        instance.clear_recording()
     return 0
 
 
