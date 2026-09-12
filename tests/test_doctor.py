@@ -477,3 +477,29 @@ def test_writing_the_report_is_the_only_change(tmp_path: Path) -> None:
     doctor.write_report(doctor.evaluate(facts()), tmp_path)
 
     assert len(list(tmp_path.iterdir())) == 1
+
+
+# --- Leftover icons on the desktop (H5) ---------------------------------------
+
+
+def test_a_leftover_icon_is_a_failure() -> None:
+    """A double click on it prints a notice instead of opening the window."""
+    checks = doctor.evaluate(facts(shortcut_stale=(Path(r"C:\Desktop\Start_Recorder.lnk"),)))
+    check = find(checks, "shortcut.stale")
+
+    assert check.level is doctor.Level.FAIL
+    assert "zeigt auf eine Datei, die es nicht mehr gibt" in check.cause
+    assert "Start_Recorder.lnk" in check.cause
+    assert doctor.exit_code(checks) == 1
+
+
+def test_a_leftover_is_reported_next_to_a_working_icon() -> None:
+    """Both can be true at once, and the leftover is the one that misleads."""
+    checks = doctor.evaluate(facts(shortcut_stale=(Path("alt.lnk"),)))
+
+    assert find(checks, "shortcut.entry").level is doctor.Level.PASS
+    assert find(checks, "shortcut.stale").level is doctor.Level.FAIL
+
+
+def test_without_leftovers_nothing_is_reported() -> None:
+    assert not [check for check in doctor.evaluate(facts()) if check.key == "shortcut.stale"]

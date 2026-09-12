@@ -259,3 +259,157 @@ def test_building_establishes_no_logon_persistence(tmp_path: Path) -> None:
     for link, spec in fake.written.items():
         assert "Startup" not in str(link)
         assert os.path.normcase(spec.workdir) == os.path.normcase(str(repo))
+
+
+# --- Leftover icons on the desktop (H5) ---------------------------------------
+
+
+def _entry(desktop: Path, name: str = shortcut.SHORTCUT_NAME) -> Path:
+    desktop.mkdir(parents=True, exist_ok=True)
+    link = desktop / name
+    link.write_text("lnk", encoding="utf-8")
+    return link
+
+
+def _reader(links: dict[Path, dict[str, str]]):
+    return lambda link: links.get(link)
+
+
+def test_a_dead_icon_of_ours_is_found_under_any_name(tmp_path: Path) -> None:
+    """Tobias' leftover pointed at `Start_Recorder.bat` and could be named anything.
+
+    Assignment therefore runs over the target path, not over the name.
+    """
+    repo = _installed_repo(tmp_path)
+    desktop = tmp_path / "Desktop"
+    dead = _entry(desktop, "Start_Recorder.lnk")
+
+    found = shortcut.stale_entries(
+        desktop,
+        repo,
+        _reader({dead: {"target": str(repo / "Start_Recorder.bat"), "arguments": "", "workdir": str(repo)}}),
+    )
+
+    assert found == [dead]
+
+
+def test_a_dead_icon_of_ours_is_removed(tmp_path: Path) -> None:
+    repo = _installed_repo(tmp_path)
+    desktop = tmp_path / "Desktop"
+    dead = _entry(desktop, "Backrec starten.lnk")
+
+    removed = shortcut.remove_stale(
+        desktop,
+        repo,
+        _reader({dead: {"target": str(repo / "Start_Recorder.bat"), "arguments": "", "workdir": str(repo)}}),
+    )
+
+    assert removed == (dead,)
+    assert not dead.exists()
+
+
+def test_an_icon_on_a_former_start_route_counts_as_stale(tmp_path: Path) -> None:
+    """The file exists, but it is not the way this version starts."""
+    repo = _installed_repo(tmp_path)
+    (repo / "Start_Recorder.bat").write_text("@echo off", encoding="utf-8")
+    desktop = tmp_path / "Desktop"
+    old = _entry(desktop, "Aufnahme.lnk")
+
+    assert shortcut.is_stale(
+        {"target": str(repo / "Start_Recorder.bat"), "arguments": "", "workdir": str(repo)}, repo
+    )
+
+    removed = shortcut.remove_stale(
+        desktop,
+        repo,
+        _reader({old: {"target": str(repo / "Start_Recorder.bat"), "arguments": "", "workdir": str(repo)}}),
+    )
+
+    assert removed == (old,)
+
+
+def test_a_foreign_icon_is_never_removed(tmp_path: Path) -> None:
+    """The desktop belongs to the user, not to this tool."""
+    repo = _installed_repo(tmp_path)
+    other = _installed_repo(tmp_path / "anderswo")
+    desktop = tmp_path / "Desktop"
+    stranger = _entry(desktop, "Irgendein anderes Programm.lnk")
+    second = _entry(desktop, "Backrec - Kopie.lnk")
+
+    removed = shortcut.remove_stale(
+        desktop,
+        repo,
+        _reader(
+            {
+                stranger: {"target": r"D:\fremd\weg.exe", "arguments": "", "workdir": r"D:\fremd"},
+                second: {"target": str(other / "weg.exe"), "arguments": "", "workdir": str(other)},
+            }
+        ),
+    )
+
+    assert removed == ()
+    assert stranger.exists()
+    assert second.exists(), "die zweite Einrichtung gehört jemand anderem"
+
+
+def test_the_current_icon_survives(tmp_path: Path) -> None:
+    repo = _installed_repo(tmp_path)
+    desktop = tmp_path / "Desktop"
+    fake = FakeDesktop()
+    shortcut.create(repo, desktop, writer=fake.write)
+    current = desktop / shortcut.SHORTCUT_NAME
+
+    removed = shortcut.remove_stale(desktop, repo, fake.read)
+
+    assert removed == ()
+    assert current.exists()
+
+
+def test_a_dead_icon_next_to_a_working_one_is_removed_alone(tmp_path: Path) -> None:
+    repo = _installed_repo(tmp_path)
+    desktop = tmp_path / "Desktop"
+    fake = FakeDesktop()
+    shortcut.create(repo, desktop, writer=fake.write)
+    current = desktop / shortcut.SHORTCUT_NAME
+    dead = _entry(desktop, "Start_Recorder.lnk")
+    fake.written[dead] = shortcut.ShortcutSpec(
+        target=str(repo / "Start_Recorder.bat"), arguments="", workdir=str(repo), description="alt"
+    )
+
+    removed = shortcut.remove_stale(desktop, repo, fake.read)
+
+    assert removed == (dead,)
+    assert current.exists()
+    assert not dead.exists()
+
+
+def test_an_unreadable_icon_is_left_alone(tmp_path: Path) -> None:
+    """Unreadable is not ours: without contents nothing places it in this folder."""
+    repo = _installed_repo(tmp_path)
+    desktop = tmp_path / "Desktop"
+    broken = _entry(desktop, "kaputt.lnk")
+
+    assert shortcut.remove_stale(desktop, repo, lambda _link: None) == ()
+    assert broken.exists()
+
+
+def test_the_message_names_how_many_icons_were_removed() -> None:
+    assert shortcut.stale_message(1) == "1 veraltete Verknüpfung vom Desktop entfernt."
+    assert shortcut.stale_message(2) == "2 veraltete Verknüpfungen vom Desktop entfernt."
+
+
+def test_the_plain_status_reads_only_the_expected_name(tmp_path: Path) -> None:
+    """Reading every link starts a helper per file; `status` must stay cheap."""
+    repo = _installed_repo(tmp_path)
+    desktop = tmp_path / "Desktop"
+    stranger = _entry(desktop, "Irgendein anderes Programm.lnk")
+    read: list[Path] = []
+
+    def counting(link: Path) -> dict[str, str] | None:
+        read.append(link)
+        return None
+
+    shortcut.status(repo, desktop, reader=counting)
+
+    assert read == []
+    assert stranger in shortcut.all_entries(desktop)

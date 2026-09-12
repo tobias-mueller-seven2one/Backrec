@@ -515,6 +515,29 @@ def _external_dependencies(assistant: Assistant) -> bool:
     return False
 
 
+def clear_stale_shortcuts(
+    repo: Path,
+    desktop: Path | None = None,
+    report: Callable[[str], None] | None = None,
+) -> int:
+    """Remove leftover icons of this folder from the desktop.
+
+    Before every enquiry about the state, not after: a leftover under a name
+    this tool never carried - Tobias' desktop held one pointing at the retired
+    `Start_Recorder.bat` - would otherwise simply stay and go on greeting a
+    double click with a notice instead of the window.
+    """
+    try:
+        removed = shortcut_module.remove_stale(desktop, repo)
+    except OSError as exc:
+        logger.warning("Veraltete Verknuepfungen nicht pruefbar: %s", exc)
+        return 0
+
+    if removed and report is not None:
+        report(shortcut_module.stale_message(len(removed)))
+    return len(removed)
+
+
 def guided_shortcut(
     assistant: Assistant,
     unattended: bool,
@@ -529,6 +552,7 @@ def guided_shortcut(
     logon persistence - so the colleague is spared the one step of the whole
     procedure that does not work without an explanation.
     """
+    clear_stale_shortcuts(repo, desktop, assistant.note)
     existing = shortcut_module.status(repo, desktop)
     if existing.installed:
         assistant.ok("Das Symbol liegt schon auf dem Desktop")

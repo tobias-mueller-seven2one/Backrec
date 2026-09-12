@@ -60,6 +60,10 @@ RUNNING_UNTOUCHED_NOTE = (
     "Eine laufende Anwendung läuft weiter; beenden lässt sie sich über das Fenster-X."
 )
 
+# The cause the diagnosis reports for a leftover icon. One wording, one place:
+# said differently in two spots the two drift apart and nobody notices.
+STALE_ENTRY_CAUSE = "zeigt auf eine Datei, die es nicht mehr gibt"
+
 
 @dataclass(frozen=True)
 class ShortcutSpec:
@@ -269,6 +273,104 @@ def points_at_repo(contents: dict[str, str] | None, repo: Path) -> bool:
 
     target = contents.get("target") or ""
     return bool(target) and os.path.normcase(target).startswith(expected + os.sep)
+
+
+@dataclass(frozen=True)
+class OwnedEntry:
+    """An icon on the desktop that belongs to this installation."""
+
+    path: Path
+    contents: dict[str, str]
+    stale: bool
+
+
+def all_entries(desktop: Path | None = None) -> list[Path]:
+    """Every shortcut on the desktop, whatever it is called."""
+    folder = desktop or desktop_folder()
+    try:
+        return sorted(folder.glob("*.lnk"))
+    except OSError as exc:
+        logger.debug("Desktop '%s' nicht lesbar: %s", folder, exc)
+        return []
+
+
+def is_stale(contents: dict[str, str] | None, repo: Path) -> bool:
+    """Whether one of our icons no longer leads to a start.
+
+    Two cases, one verdict: the target is gone, or it exists but is not the way
+    this version starts. The second half is the one that bit - the icon left
+    over from `Start_Recorder.bat` points at a file that is still there and only
+    prints a notice when it is double-clicked.
+    """
+    target = ((contents or {}).get("target") or "").strip()
+    if not target or not Path(target).is_file():
+        return True
+    return os.path.normcase(target) != os.path.normcase(str(launcher(repo)))
+
+
+def owned_entries(
+    desktop: Path | None = None,
+    repo: Path | None = None,
+    reader: ShortcutReader | None = None,
+) -> list[OwnedEntry]:
+    """The icons on the desktop whose target or working directory lies here.
+
+    Assignment by path, not by name: the leftover on Tobias' desktop pointed at
+    `Start_Recorder.bat`, and it could have been called anything at all - a name
+    that is on nobody's list is exactly what a name-based search never finds.
+
+    Reading every `.lnk` costs one COM call per file. That is why this runs in
+    the setup, in the diagnosis and on the `shortcut` command, and nowhere that
+    repeats: `status` alone stays the cheap look at the one expected name.
+    """
+    root = repo or paths.repo_root()
+    read = reader or read_link
+
+    found: list[OwnedEntry] = []
+    for entry in all_entries(desktop):
+        contents = read(entry)
+        if not points_at_repo(contents, root):
+            continue
+        found.append(OwnedEntry(entry, dict(contents or {}), is_stale(contents, root)))
+    return found
+
+
+def stale_entries(
+    desktop: Path | None = None,
+    repo: Path | None = None,
+    reader: ShortcutReader | None = None,
+) -> list[Path]:
+    """Our own icons that no longer start anything."""
+    return [owned.path for owned in owned_entries(desktop, repo, reader) if owned.stale]
+
+
+def remove_stale(
+    desktop: Path | None = None,
+    repo: Path | None = None,
+    reader: ShortcutReader | None = None,
+) -> tuple[Path, ...]:
+    """Delete our own icons that no longer start anything.
+
+    A foreign icon is never touched: the desktop belongs to the user, and
+    clearing our own leftovers is no permission to tidy up around them.
+    """
+    removed: list[Path] = []
+    for entry in stale_entries(desktop, repo, reader):
+        try:
+            entry.unlink(missing_ok=True)
+        except OSError as exc:
+            logger.warning("Veraltete Verknuepfung '%s' nicht entfernbar: %s", entry, exc)
+            continue
+        logger.info("Veraltete Verknuepfung entfernt: %s", entry)
+        removed.append(entry)
+    return tuple(removed)
+
+
+def stale_message(count: int) -> str:
+    """The one line the setup and the `shortcut` command report about leftovers."""
+    if count == 1:
+        return "1 veraltete Verknüpfung vom Desktop entfernt."
+    return f"{count} veraltete Verknüpfungen vom Desktop entfernt."
 
 
 def status(

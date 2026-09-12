@@ -205,6 +205,10 @@ def _command_shortcut(args: argparse.Namespace) -> int:
         _emit(ui, result.notes)
         return 0
 
+    # Rebuilding is the moment to sweep up: an icon of a retired start route
+    # carries any name at all, and the new one would land next to it.
+    control.clear_stale_shortcuts(paths.repo_root(), report=ui.note)
+
     built = shortcut_module.create()
     if built.ok:
         _emit(ui, built.lines)

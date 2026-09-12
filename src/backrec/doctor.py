@@ -125,6 +125,7 @@ class Observations:
     directories: tuple[DirectoryFact, ...] = ()
 
     shortcut: shortcut_module.ShortcutStatus | None = None
+    shortcut_stale: tuple[Path, ...] = ()
 
     logs_dir: Path | None = None
     logs_exists: bool = True
@@ -474,7 +475,32 @@ def _directory_checks(facts: Observations) -> list[Check]:
     return checks
 
 
+def _stale_shortcut_check(facts: Observations) -> Check:
+    """Leftover icons of this folder that no longer start anything.
+
+    Reported separately from the icon itself, because both can be true at once:
+    a working icon next to one from an earlier version, which is the state that
+    makes a double click print a notice instead of opening the window.
+    """
+    names = ", ".join(entry.name for entry in facts.shortcut_stale)
+    return Check(
+        "shortcut.stale",
+        CATEGORY_SHORTCUT,
+        "Veraltete Verknüpfungen",
+        Level.FAIL,
+        f"{names}: {shortcut_module.STALE_ENTRY_CAUSE}",
+        "Setup.cmd doppelklicken entfernt sie.",
+    )
+
+
 def _shortcut_checks(facts: Observations) -> list[Check]:
+    checks = _entry_checks(facts)
+    if facts.shortcut_stale:
+        checks.append(_stale_shortcut_check(facts))
+    return checks
+
+
+def _entry_checks(facts: Observations) -> list[Check]:
     state = facts.shortcut
     if state is None:
         return []
@@ -923,6 +949,13 @@ def _observe_state(facts: Observations, root: Path) -> None:
 
     legacy = paths.legacy_config_path(root)
     facts.legacy_env = legacy if legacy.is_file() else None
+
+    try:
+        # Reads every `.lnk` on the desktop, one COM call per file. Affordable
+        # here -- the diagnosis runs on demand, never in a cycle of the window.
+        facts.shortcut_stale = tuple(shortcut_module.stale_entries(repo=root))
+    except OSError as exc:
+        logger.debug("Veraltete Verknuepfungen nicht lesbar: %s", exc)
 
     facts.stale_folders = stale_update_folders(root)
     facts.report_count = count_reports(paths.reports_dir())

@@ -375,6 +375,44 @@ def test_a_failed_icon_is_a_warning_and_the_setup_still_finishes(
     assert "Schritt 7" in printed
 
 
+# --- Leftover icons on the desktop (H5) ---------------------------------------
+
+
+def test_a_leftover_icon_of_the_retired_route_is_removed_and_replaced(
+    calm, tmp_path, monkeypatch
+) -> None:
+    """Tobias' desktop held one pointing at `Start_Recorder.bat` (H5)."""
+    desktop = Desktop(tmp_path / "Desktop")
+    desktop.folder.mkdir(parents=True)
+    old = desktop.folder / "Start_Recorder.lnk"
+    old.write_text("lnk", encoding="utf-8")
+    desktop.written[old] = shortcut_module.ShortcutSpec(
+        target=str(calm / "Start_Recorder.bat"), arguments="", workdir=str(calm), description="alt"
+    )
+
+    result, printed = run_setup(calm, desktop, monkeypatch, unattended=True)
+
+    assert not old.exists()
+    assert "1 veraltete Verknüpfung vom Desktop entfernt." in printed
+    assert result.shortcut_installed
+    assert (desktop.folder / shortcut_module.SHORTCUT_NAME).is_file()
+
+
+def test_a_foreign_icon_survives_the_setup(calm, tmp_path, monkeypatch) -> None:
+    desktop = Desktop(tmp_path / "Desktop")
+    desktop.folder.mkdir(parents=True)
+    stranger = desktop.folder / "Irgendein anderes Programm.lnk"
+    stranger.write_text("lnk", encoding="utf-8")
+    desktop.written[stranger] = shortcut_module.ShortcutSpec(
+        target=r"D:\fremd\weg.exe", arguments="", workdir=r"D:\fremd", description="fremd"
+    )
+
+    _result, printed = run_setup(calm, desktop, monkeypatch, unattended=True)
+
+    assert stranger.exists()
+    assert "entfernt" not in printed
+
+
 # --- Version change -----------------------------------------------------------
 
 
