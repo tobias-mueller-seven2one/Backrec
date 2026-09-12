@@ -87,6 +87,9 @@ EXCLUDED_PATTERNS: tuple[str, ...] = (
     "config.toml",
     ".env",
     MANIFEST_NAME,
+    # Tobias' list of hand acceptances (convention section 10a). It names
+    # internal tasks and specs and has no business on a colleague's machine.
+    "ABNAHME.md",
 )
 
 # Patterns that give a machine away. Assembled instead of spelled out, and that

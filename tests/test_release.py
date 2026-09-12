@@ -83,6 +83,12 @@ def test_nothing_local_ever_reaches_the_archive(tmp_path: Path, unwanted: str) -
     assert unwanted not in packed
 
 
+def test_the_acceptance_list_stays_out_of_the_archive() -> None:
+    """It names internal tasks and belongs to Tobias, not to a colleague."""
+    assert release.is_excluded(Path("ABNAHME.md"))
+    assert not release.is_excluded(Path("README.md"))
+
+
 def test_the_planning_artefacts_stay_out(tmp_path: Path) -> None:
     """The whole folder, not only the proposals in it.
 
