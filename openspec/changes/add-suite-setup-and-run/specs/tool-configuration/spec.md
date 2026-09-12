@@ -84,6 +84,34 @@ Das Repository MUST eine vollständige, kommentierte Vorlage der Konfiguration e
 - **WHEN** eine gefüllte Konfigurationsdatei im Repository angelegt wird
 - **THEN** wird sie von der Versionsverwaltung ignoriert
 
+### Requirement: Neue Schlüssel der Vorlage ergänzt das Einrichten
+
+Das Einrichten MUST Schlüssel, die die Vorlage führt und die lokale Datei nicht hat, mit dem Wert und dem Kommentar der Vorlage in die lokale Datei schreiben und MUST das in einer Zeile melden. Vorhandene Werte MUST NOT dabei überschrieben, verschoben oder entfernt werden. Die ergänzte Datei MUST danach lesbar bleiben, und ein neuer Schlüssel MUST NOT hinter einem Abschnittskopf landen, weil er dort zu einem anderen Namen würde. Ein zweiter Lauf MUST die Datei unverändert lassen. Ein Kollege MUST NOT einen Schlüssel von Hand anlegen müssen. Fehlt die lokale Datei, MUST das Ergänzen nichts anlegen; dafür ist das Anlegen aus der Vorlage zuständig.
+
+#### Scenario: Vorlage führt einen neuen Schlüssel
+
+- **WHEN** das Einrichten läuft und die Vorlage einen Schlüssel führt, den die lokale Datei nicht hat
+- **THEN** steht der Schlüssel danach mit dem Wert der Vorlage in der lokalen Datei
+- **AND** über ihm steht der Kommentar aus der Vorlage
+- **AND** die Ausgabe meldet die Anzahl der ergänzten Einstellungen in einer Zeile
+
+#### Scenario: Vorhandener Wert bleibt
+
+- **WHEN** die lokale Datei einen Schlüssel führt, dessen Wert von der Vorlage abweicht
+- **THEN** bleibt dieser Wert unverändert
+
+#### Scenario: Zweiter Lauf
+
+- **WHEN** das Einrichten ein zweites Mal läuft und nichts fehlt
+- **THEN** bleibt die Datei unverändert
+- **AND** es wird nichts gemeldet
+
+#### Scenario: Lokale Datei mit eigenem Abschnitt
+
+- **WHEN** die lokale Datei einen Abschnittskopf enthält
+- **THEN** steht der ergänzte Schlüssel vor dem ersten Abschnittskopf
+- **AND** die Datei bleibt lesbar
+
 ### Requirement: Ableitung der Verzeichnisse aus einem Basisordner
 
 Die Einrichtung MUST einen Basisordner für die Datenkette erfragen und daraus beide Verzeichnisse vorschlagen: das Zielverzeichnis als Eingangsordner unterhalb des Basisordners, das Aufnahmeverzeichnis ausdrücklich **außerhalb** eines Cloud-synchronisierten Ordners im Benutzerprofil. Der Vorschlag MUST vor dem Schreiben zur Bestätigung angezeigt werden. Beide Werte MUST anschließend ausdrücklich in der eigenen Konfiguration stehen; die Anwendung MUST NOT sie zur Laufzeit erneut aus dem Basisordner ableiten.

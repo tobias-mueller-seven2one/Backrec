@@ -242,6 +242,12 @@ Die Einrichtung MUST in dieser Reihenfolge ablaufen: Laufzeit, Umgebung, Konfigu
 - **AND** bei Zustimmung startet sie die Anwendung
 - **AND** bei Ablehnung endet sie, ohne zu starten
 
+#### Scenario: Der Start öffnet das Fenster
+
+- **WHEN** die Einrichtung im letzten Schritt startet
+- **THEN** startet sie denselben Weg, den die Desktop-Verknüpfung startet
+- **AND** es erscheint das Anwendungsfenster und nicht nur ein Prozess ohne Fenster
+
 #### Scenario: Unbeaufsichtigte Einrichtung
 
 - **WHEN** die Einrichtung unbeaufsichtigt angefordert wird

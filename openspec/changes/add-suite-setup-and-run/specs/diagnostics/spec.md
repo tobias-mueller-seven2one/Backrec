@@ -108,7 +108,7 @@ Die Diagnose MUST prüfen, ob der Paket- und Umgebungsmanager verfügbar ist, ob
 
 ### Requirement: Prüfung der Konfiguration
 
-Die Diagnose MUST prüfen, ob die Konfigurationsdatei existiert und parsebar ist, ob alle Pflichtschlüssel vorhanden sind, ob unbekannte Schlüssel enthalten sind und ob die Vorlage Schlüssel führt, die in der lokalen Datei fehlen. Sie MUST für jeden wirksamen Wert die Schicht nennen, aus der er stammt. Sie MUST NOT fehlende Schlüssel selbst ergänzen.
+Die Diagnose MUST prüfen, ob die Konfigurationsdatei existiert und parsebar ist, ob alle Pflichtschlüssel vorhanden sind, ob unbekannte Schlüssel enthalten sind und ob die Vorlage Schlüssel führt, die in der lokalen Datei fehlen. Sie MUST für jeden wirksamen Wert die Schicht nennen, aus der er stammt. Sie MUST NOT fehlende Schlüssel selbst ergänzen. Der genannte nächste Schritt MUST NOT Handarbeit an der Datei verlangen, sondern MUST auf das Einrichten verweisen, das neue Vorlagen-Schlüssel selbst ergänzt.
 
 #### Scenario: Fehlender Pflichtschlüssel
 
@@ -125,6 +125,7 @@ Die Diagnose MUST prüfen, ob die Konfigurationsdatei existiert und parsebar ist
 - **WHEN** die Vorlage einen Schlüssel führt, der in der lokalen Datei fehlt
 - **THEN** meldet die Diagnose eine Warnung
 - **AND** der Schlüssel wird nicht selbsttätig ergänzt
+- **AND** der nächste Schritt nennt das Einrichten und nicht das Ergänzen von Hand
 
 #### Scenario: Herkunft der Werte
 
@@ -224,3 +225,28 @@ Die Diagnose MUST melden, ob eine Desktop-Verknüpfung vorhanden ist, ob sie auf
 - **WHEN** im Protokollverzeichnis mehr Diagnose-Berichte liegen als die festgelegte Anzahl
 - **THEN** meldet die Diagnose eine Warnung mit der Anzahl
 - **AND** sie nennt das Löschen als nächsten Schritt
+
+### Requirement: Prüfung auf veraltete Verknüpfungen auf dem Desktop
+
+Die Diagnose MUST alle Verknüpfungen des Desktops lesen und die als eigene erkennen, deren Startziel oder Arbeitsverzeichnis in diesem Repository liegt — über den Zielpfad, MUST NOT über den Namen. Eine eigene Verknüpfung, deren Startziel nicht mehr existiert oder nicht der aktuelle Startweg ist, MUST sie als `fail` mit der Ursache „zeigt auf eine Datei, die es nicht mehr gibt" melden. Fremde Verknüpfungen MUST unberührt und ungemeldet bleiben. Diese Prüfung MUST NOT in den zyklischen Abläufen des Fensters stattfinden, weil das Zurücklesen je Verknüpfung einen Systemaufruf kostet.
+
+#### Scenario: Verwaiste eigene Verknüpfung unter anderem Namen
+
+- **WHEN** auf dem Desktop eine Verknüpfung beliebigen Namens liegt, deren Ziel in diesem Repository liegt und nicht mehr existiert
+- **THEN** meldet die Diagnose sie als Fehler mit der Ursache, dass das Ziel nicht mehr existiert
+- **AND** sie nennt das Einrichten als nächsten Schritt
+
+#### Scenario: Verknüpfung auf einen abgelösten Startweg
+
+- **WHEN** eine eigene Verknüpfung auf eine vorhandene, aber abgelöste Startdatei zeigt
+- **THEN** meldet die Diagnose sie als Fehler
+
+#### Scenario: Verwaiste Verknüpfung neben einer gültigen
+
+- **WHEN** neben der gültigen Verknüpfung eine verwaiste eigene Verknüpfung liegt
+- **THEN** meldet die Diagnose die gültige als bestanden und die verwaiste als Fehler
+
+#### Scenario: Fremde Verknüpfung
+
+- **WHEN** auf dem Desktop eine Verknüpfung liegt, deren Ziel außerhalb dieses Repositorys liegt
+- **THEN** meldet die Diagnose sie nicht

@@ -422,6 +422,79 @@ Verworfen: **die README als Einstieg**, wie es die erste Fassung dieses Changes 
 
 Preis der Entscheidung: eine fünfte Datei im Wurzelverzeichnis, das D16 gerade erst auf das Nötigste zusammengestrichen hat, und ein Sprachbruch in einem sonst englischen öffentlichen Repository, der jedem Fremden auffällt. Dazu ein Text, der doppelt gepflegt werden **will**, sobald sich Abläufe ändern — die maschinelle Prüfung fängt Formfehler, aber keine inhaltliche Veralterung. Abgefedert dadurch, dass die Datei keinen Vorgang startet und deshalb nicht mit `Setup.cmd` und `Start.cmd` konkurriert, und dass die Abnahme des Kollegenwegs (Aufgabe 13.1a) sie als einzige zugelassene Anleitung benutzt: veraltet sie, fällt es dort auf.
 
+### D23: Befunde aus Tobias' erstem eigenem Setup (12.09.2026)
+
+Tobias hat die Reihe zum ersten Mal selbst eingerichtet, ohne Vorwissen aus der Umsetzung. Von den
+fünf Befunden trifft einer Backrec im Code, zwei betreffen es abgewandelt, und einer trifft es gar
+nicht. Alle vier sind hier festgehalten, weil „hier kein Befund" nur dann etwas wert ist, wenn
+jemand nachgesehen hat.
+
+**H1 — der Dateimanager öffnete „Dokumente" statt der Quelle: trifft Backrec nicht.** Bei den
+Nachbarwerkzeugen ging `explorer /select,<pfad>` als Argumentliste an den Prozessstart; Python setzt
+ein Argument mit Leerzeichen als Ganzes in Anführungszeichen, und `"/select,C:\…\Name mit
+Leerzeichen.lnk"` ist für den Dateimanager kein Schalter, sondern ein unbrauchbarer Pfad. Backrec
+hat diese Stelle nicht: es kennt keinen geführten Autostart, und die beiden Stellen, die einen
+Ordner zeigen — „Protokolle öffnen" und der Diagnosebericht — benutzen `os.startfile`, das einen
+Pfad nimmt und keinen Schalter braucht. `control.py:1026` ist der Aufruf des Aktualisierungshelfers,
+also `powershell.exe` mit echten Argumenten; dort ist die Liste richtig. Statt einer Änderung steht
+jetzt ein Test über alle Quelldateien, der eine Explorer-Kommandozeile ausschließt: die Regel der
+Konvention (§5, Revision 12.09.2026) gilt suiteweit, und ohne Prüfung wandert der Fehler beim
+nächsten „öffne mal den Ordner" hier ein.
+
+**H2 — der Kollege sollte Einstellungen von Hand anlegen.** Die Diagnose meldete Schlüssel, die die
+Vorlage inzwischen führt und die lokale Datei nicht hat, mit dem nächsten Schritt „Die Angabe von
+Hand ergänzen; ergänzt wird hier nichts." Für die Zielgruppe ist das kein nächster Schritt, sondern
+das Ende. Die Konvention (§4, Revision 12.09.2026) verlangt jetzt, dass das Einrichten sie selbst
+ergänzt: `wizard.complete_from_template` schreibt Wert **und** Kommentar der Vorlage in die lokale
+Datei und meldet „N neue Einstellungen mit Standardwerten ergänzt". Bestehendes wird nie angefasst.
+
+Zwei Details, die nicht offensichtlich sind: Der Kommentar wird aus `config.example.toml` **geparst**
+statt im Code doppelt geführt (`wizard.template_comments`), sonst gäbe es zwei Quellen für denselben
+Satz — genau das, was Grundsatz 7 der Konvention verbietet. Und ein neuer Schlüssel wird vor dem
+ersten Abschnittskopf eingefügt, nicht ans Dateiende: hinter `[abschnitt]` angehängt würde er
+stillschweigend zu `abschnitt.schlüssel` und wäre für das Werkzeug verschwunden. Backrecs Vorlage ist
+heute flach; die Regel kostet acht Zeilen und verhindert einen Fehler, den niemand bemerken würde.
+
+Die Diagnose bleibt strikt lesend — sie ergänzt nichts (D21) — und nennt nur noch „Setup.cmd
+doppelklicken ergänzt sie." als nächsten Schritt.
+
+**H4 — nach „Jetzt starten" war kein Symbol zu sehen: für Backrec anders gelagert.** Der Pfeil der
+ausgeblendeten Symbole, den die vier anderen Werkzeuge jetzt nennen, gehört zum Infobereich neben
+der Uhr. Backrec hat kein Symbol dort (D14, D20); sein Ergebnis ist ein Fenster, und die Schlusszeile
+nennt folgerichtig den Desktop. Den Satz hier zu übernehmen wäre eine Anleitung auf einen Ort, an
+dem nie etwas erscheint. Geprüft wurde stattdessen die Frage hinter H4: startet Schritt 7 wirklich
+das, was der Kollege sehen soll? Ja — `control.start_command` ist jetzt die eine Stelle, aus der
+Schritt 7, `Start.cmd` und die Desktop-Verknüpfung ihre Kommandozeile ziehen, und ein Test bindet
+sie an `shortcut.build_spec`. Ohne diese Bindung könnten die drei Wege auseinanderlaufen, und ein
+Start ohne Fenster bestünde jede Prüfung auf Prozesse.
+
+**H5 — eine alte Verknüpfung zeigte auf `Start_Recorder.bat`.** Im Startup-Ordner der Nachbarn lagen
+verwaiste Einträge; auf Tobias' Desktop lag das Gegenstück, eine Verknüpfung auf den abgelösten
+Startweg. `target_current` erkannte sie bereits als nicht eingerichtet (D11) — aber nur die eine
+Verknüpfung namens `Backrec.lnk`. Eine Verknüpfung heißt, wie der Benutzer sie genannt hat, und ein
+Name, der auf keiner Liste steht, wird von keiner namensbasierten Suche gefunden.
+
+Die Zuordnung läuft deshalb neu über den **Zielpfad**: `shortcut.owned_entries` liest jede `.lnk` des
+Desktops zurück und erkennt als eigen, wessen Startziel oder Arbeitsverzeichnis in diesem Ordner
+liegt. Veraltet ist eine eigene Verknüpfung, deren Ziel es nicht mehr gibt **oder** die nicht der
+aktuelle Startweg ist — die zweite Hälfte ist genau Tobias' Fall, denn `Start_Recorder.bat` gibt es
+noch, es sagt nur nichts mehr als einen Hinweis. Setup-Schritt 6 und das Kommando `shortcut`
+entfernen solche Verknüpfungen mit einer Zeile Meldung und bauen danach neu auf
+(`control.clear_stale_shortcuts`); die Diagnose meldet sie als `fail`. Fremde Verknüpfungen bleiben
+unberührt: der Desktop gehört dem Benutzer, und das Aufräumen der eigenen Hinterlassenschaft ist
+keine Erlaubnis, um sie herum aufzuräumen.
+
+Der Preis ist Rechenzeit: jede `.lnk` zurückzulesen kostet einen COM-Aufruf. Deshalb steht der teure
+Weg **nur** im Einrichten, in der Diagnose und am Kommando `shortcut`; `status` bleibt der billige
+Blick auf den einen erwarteten Namen, den das Fenster und die Auskunft benutzen. Ein Test hält diese
+Trennung fest, weil sie sonst beim nächsten Aufräumen verschwindet.
+
+Verworfen: **`status` selbst auf den Zielpfad umstellen** — es beantwortet die Frage „liegt meine
+Verknüpfung da", und die hat einen Namen; alle `.lnk` dafür zu lesen macht eine Auskunft aus einem
+Blick. Verworfen: **veraltete Verknüpfungen nur melden statt entfernen** — auf dem Desktop entsteht
+keine Anmeldepersistenz (D14), das Entfernen blockiert also kein Schutzprogramm, und ein Befund, den
+der Kollege von Hand abarbeiten müsste, ist derselbe Fehler wie H2.
+
 ## Risks / Trade-offs
 
 - **Die Verschiebung von 907 Zeilen bricht den Aufnahmekern, ohne dass Tests es merken** → die Aufteilung (D1) geschieht als erster Abschnitt der Aufgabenliste, ohne jede Verhaltensänderung, mit einer vollständigen Aufnahme als Abnahme; alle Verhaltensänderungen folgen danach in eigenen Aufgaben.

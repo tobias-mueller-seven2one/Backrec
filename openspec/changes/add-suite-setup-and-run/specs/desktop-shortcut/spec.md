@@ -32,6 +32,32 @@ Die Einrichtung MUST am Ende fragen, ob eine Verknüpfung auf dem Desktop angele
 - **THEN** meldet die Einrichtung eine Warnung mit Pfad und Grund
 - **AND** sie schließt den übrigen Ablauf ab
 
+### Requirement: Veraltete eigene Verknüpfungen auf dem Desktop
+
+Die Einrichtung und das Kommando für den Aufbau MUST vor der Frage nach dem Zustand die eigenen Verknüpfungen des Desktops entfernen, die nichts mehr starten, und MUST das in **einer** Zeile melden. Als eigen MUST eine Verknüpfung gelten, deren Startziel oder Arbeitsverzeichnis in diesem Repository liegt; die Zuordnung MUST über den Zielpfad laufen und MUST NOT über den Namen, weil eine Verknüpfung den Namen trägt, den der Benutzer ihr gegeben hat. Als veraltet MUST eine eigene Verknüpfung gelten, deren Startziel nicht mehr existiert oder nicht der aktuelle Startweg ist. Fremde Verknüpfungen MUST unberührt bleiben. Nach dem Entfernen MUST der Ablauf wie üblich weiterlaufen und die Verknüpfung neu aufbauen.
+
+#### Scenario: Verknüpfung des abgelösten Startskripts unter eigenem Namen
+
+- **WHEN** auf dem Desktop eine Verknüpfung beliebigen Namens liegt, die das abgelöste Startskript dieses Repositorys startet
+- **THEN** ist sie nach der Einrichtung entfernt
+- **AND** eine Zeile nennt, wie viele veraltete Verknüpfungen entfernt wurden
+- **AND** danach liegt die aktuelle Verknüpfung auf dem Desktop
+
+#### Scenario: Gültige Verknüpfung bleibt
+
+- **WHEN** die vorhandene Verknüpfung auf den aktuellen Startweg zeigt
+- **THEN** wird sie nicht entfernt
+
+#### Scenario: Fremde Verknüpfung bleibt
+
+- **WHEN** auf dem Desktop eine Verknüpfung einer anderen Einrichtung oder eines fremden Programms liegt
+- **THEN** bleibt sie liegen, auch wenn ihr Ziel nicht mehr existiert
+
+#### Scenario: Unlesbare Verknüpfung bleibt
+
+- **WHEN** eine Verknüpfung auf dem Desktop nicht gelesen werden kann
+- **THEN** bleibt sie liegen, weil nichts sie diesem Repository zuordnet
+
 ### Requirement: Kein Autostart, kein Symbol im Infobereich
 
 Die Anwendung MUST NOT einen Eintrag im Autostart-Ordner des Benutzers, einen Ausführungsschlüssel in der Registry oder eine geplante Aufgabe anlegen. Sie MUST NOT ein Symbol im Infobereich betreiben. Das Kommando für die Verknüpfung MUST ausschließlich eine Verknüpfung erzeugen und MUST NOT Anmeldepersistenz einrichten.
