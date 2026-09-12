@@ -1,4 +1,4 @@
-# Spiegelt eine gepruefte, entpackte neue Fassung ein, waehrend sich Backrec
+﻿# Spiegelt eine gepruefte, entpackte neue Fassung ein, waehrend sich Backrec
 # gerade beendet.
 #
 # Warum ausserhalb der Arbeitsumgebung: der Code, der aktualisiert, laeuft aus
@@ -50,7 +50,7 @@ while ((Get-Date) -lt $deadline) {
 }
 
 if (Get-Process -Id $WaitForPid -ErrorAction SilentlyContinue) {
-    Write-Zeile "Abbruch: die laufende Anwendung ($WaitForPid) reagiert nicht. Der bisherige Stand bleibt unveraendert."
+    Write-Zeile "Abbruch: die laufende Anwendung ($WaitForPid) reagiert nicht. Der bisherige Stand bleibt unverändert."
     Write-Host ''
     Write-Host 'Was ist passiert: Die laufende Anwendung hat sich nicht beendet.'
     Write-Host 'Was tun: Den Rechner neu starten und es noch einmal versuchen.'
@@ -95,7 +95,7 @@ foreach ($relativ in $neueDateien) {
 # vorherigen Fassung im Ordner stehen -- und die Einrichtung gleich danach haelt
 # jede Datei, die neu in dieser Fassung ist, fuer eine Altlast und loescht sie.
 Copy-Item -Path $neueListe -Destination (Join-Path $RepoPath 'release-manifest.json') -Force
-Write-Zeile "$gespiegelt Datei(en) uebernommen."
+Write-Zeile "$gespiegelt Datei(en) übernommen."
 
 # --- Altdateien entfernen ----------------------------------------------------
 $entfernt = 0
@@ -107,7 +107,7 @@ foreach ($relativ in $alteDateien) {
         $entfernt++
     }
 }
-Write-Zeile "$entfernt nicht mehr benoetigte Datei(en) entfernt."
+Write-Zeile "$entfernt nicht mehr benötigte Datei(en) entfernt."
 
 Copy-Item -Path $neueListe -Destination $ManifestPath -Force
 
@@ -130,13 +130,13 @@ Remove-Item -Path $StagingPath -Recurse -Force -ErrorAction SilentlyContinue
 # erbt. Das startende cmd suchte Setup.cmd deshalb dort, wo Backrec gestartet
 # wurde, fand nichts -- und das Aktualisieren endete mit gespiegelten Dateien,
 # ohne nachgezogene Arbeitsumgebung und ohne Neustart.
-Write-Zeile 'Die Einrichtung wird ohne Rueckfragen nachgezogen.'
+Write-Zeile 'Die Einrichtung wird ohne Rückfragen nachgezogen.'
 $einrichten = Join-Path $RepoPath 'Setup.cmd'
 if (-not (Test-Path $einrichten)) {
     Write-Zeile "Abbruch: $einrichten gibt es nicht."
     Write-Host ''
     Write-Host 'Was ist passiert: Im Ordner von Backrec fehlt die Datei zum Einrichten.'
-    Write-Host 'Was tun: Die neue Fassung noch einmal ueber den Ordner entpacken.'
+    Write-Host 'Was tun: Die neue Fassung noch einmal über den Ordner entpacken.'
     Start-Sleep -Seconds 10
     exit 1
 }
@@ -160,7 +160,7 @@ Write-Zeile "Einrichtung beendet (Ergebnis $code)."
 
 if ($code -eq 0) {
     Write-Host ''
-    Write-Host 'Fertig. Backrec laeuft wieder.'
+    Write-Host 'Fertig. Backrec läuft wieder.'
 } else {
     Write-Host ''
     Write-Host 'Was ist passiert: Nach dem Aktualisieren ist noch etwas offen.'

@@ -1,4 +1,4 @@
-# Bootstrap fuer Setup.cmd: Zonenkennung entfernen, Hilfsprogramm beschaffen,
+﻿# Bootstrap fuer Setup.cmd: Zonenkennung entfernen, Hilfsprogramm beschaffen,
 # Arbeitsumgebung aufbauen.
 #
 # Warum ueberhaupt ein Skript vor dem eigentlichen Einrichten: das Einrichten
@@ -32,7 +32,7 @@ try {
         Unblock-File -ErrorAction SilentlyContinue
 } catch {
     # Nicht fatal: schlimmstenfalls erscheint ein weiterer Sicherheitsdialog.
-    Write-Host '    [!] Die Kennzeichnung aus dem Internet liess sich nicht entfernen.'
+    Write-Host '    [!] Die Kennzeichnung aus dem Internet ließ sich nicht entfernen.'
     Write-Host '        Es kann daher ein weiterer Sicherheitsdialog erscheinen; dort'
     Write-Host '        in den Eigenschaften der Datei auf Zulassen klicken.'
 }
@@ -42,7 +42,7 @@ Write-Schritt 'Vorbereitung: Hilfsprogramme'
 
 $uv = Get-Command uv -ErrorAction SilentlyContinue
 if (-not $uv) {
-    Write-Host '    Das Hilfsprogramm fuer die Einrichtung fehlt und wird jetzt geholt.'
+    Write-Host '    Das Hilfsprogramm für die Einrichtung fehlt und wird jetzt geholt.'
     $winget = Get-Command winget -ErrorAction SilentlyContinue
     if ($winget) {
         & winget install --id astral-sh.uv -e --scope user --accept-package-agreements --accept-source-agreements | Out-Null
@@ -61,8 +61,8 @@ if (-not $uv) {
 }
 
 if (-not $uv) {
-    Write-Schlecht 'Das Hilfsprogramm fuer die Einrichtung liess sich nicht holen.' `
-                   'Internetverbindung pruefen und Setup.cmd erneut doppelklicken.'
+    Write-Schlecht 'Das Hilfsprogramm für die Einrichtung ließ sich nicht holen.' `
+                   'Internetverbindung prüfen und Setup.cmd erneut doppelklicken.'
     exit 1
 }
 Write-Gut 'Hilfsprogramm vorhanden'
@@ -75,7 +75,7 @@ Write-Schritt 'Vorbereitung: Arbeitsumgebung'
 # Zurueck bleibt ein Ordner ohne pyvenv.cfg, den ein erneutes Aufbauen
 # kommentarlos stehen laesst -- und jeder Start scheitert danach.
 if ((Test-Path '.venv') -and -not (Test-Path '.venv\pyvenv.cfg')) {
-    Write-Host '    Eine unvollstaendige Arbeitsumgebung wird neu aufgebaut.'
+    Write-Host '    Eine unvollständige Arbeitsumgebung wird neu aufgebaut.'
     Remove-Item -Recurse -Force '.venv' -ErrorAction SilentlyContinue
 }
 
@@ -90,8 +90,8 @@ if ((Test-Path '.venv') -and -not (Test-Path '.venv\pyvenv.cfg')) {
 # Programmdatei nicht frei. Dieses Skript steht ausserhalb.
 & uv sync --locked --no-dev --no-editable --reinstall-package backrec
 if ($LASTEXITCODE -ne 0) {
-    Write-Schlecht 'Die Arbeitsumgebung liess sich nicht aufbauen.' `
-                   'Internetverbindung pruefen und Setup.cmd erneut doppelklicken.'
+    Write-Schlecht 'Die Arbeitsumgebung ließ sich nicht aufbauen.' `
+                   'Internetverbindung prüfen und Setup.cmd erneut doppelklicken.'
     exit 1
 }
 Write-Gut 'Arbeitsumgebung steht'

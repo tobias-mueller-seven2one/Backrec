@@ -193,6 +193,50 @@ def test_the_update_helper_does_not_wait_for_the_tool_it_restarts() -> None:
     assert "WaitForExit()" in code
 
 
+HELFER = ("bootstrap-uv.ps1", "apply-update.ps1")
+
+# Spellings that replace an umlaut. The first lines a colleague ever sees come
+# out of the bootstrap, and "fuer" in them says the tool could not manage its
+# own alphabet.
+ERSATZSCHREIBWEISEN = (
+    "fuer",
+    "ueber",
+    "laeuft",
+    "liess",
+    "unvollstaendig",
+    "Rueckfrage",
+    "benoetigt",
+    "uebernommen",
+    "unveraendert",
+    "pruefen",
+)
+
+
+def test_the_helper_scripts_carry_the_byte_order_mark() -> None:
+    """Without it PowerShell 5.1 reads the file as ANSI and every umlaut breaks.
+
+    That is the reason the sentences in these two files used to spell their
+    umlauts out - and the reason they no longer have to.
+    """
+    for name in HELFER:
+        assert (ROOT / "scripts" / "win" / name).read_bytes().startswith(b"\xef\xbb\xbf"), name
+
+
+def test_no_visible_line_of_a_helper_script_spells_an_umlaut_out() -> None:
+    offences: list[tuple[str, int, str]] = []
+
+    for name in HELFER:
+        raw = (ROOT / "scripts" / "win" / name).read_text(encoding="utf-8-sig")
+        for number, line in enumerate(raw.splitlines(), start=1):
+            if line.lstrip().startswith("#") or "'" not in line and '"' not in line:
+                continue
+            offences.extend(
+                (name, number, ersatz) for ersatz in ERSATZSCHREIBWEISEN if ersatz in line
+            )
+
+    assert offences == []
+
+
 def test_the_helper_scripts_stay_within_powershell_5() -> None:
     """Windows 11 ships 5.1; anything newer is an extra installation.
 
