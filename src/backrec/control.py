@@ -101,6 +101,7 @@ class StartResult:
     pid: int | None = None
     problem: preflight.Problem | None = None
     message: str = ""
+    foreign_folder: str | None = None
 
 
 @dataclass(frozen=True)
@@ -123,6 +124,7 @@ class StatusReport:
     logs_path: Path
     state_path: Path
     repo_path: Path
+    foreign_folder: str | None = None
 
 
 @dataclass(frozen=True)
@@ -184,6 +186,17 @@ def short_reason(result: subprocess.CompletedProcess[str]) -> str:
             return reason
 
     return "es hat nicht geklappt; die Einzelheiten stehen in der Aufzeichnung"
+
+
+def foreign_installation(repo: Path | None = None) -> str | None:
+    """The folder of a second, unpacked copy that is running right now.
+
+    Its record never blocks this start - but it is the answer to the question
+    that follows, which is why a window is on screen that this folder knows
+    nothing about. Left unsaid, the two copies look like one that misbehaves.
+    """
+    root = repo or paths.repo_root()
+    return instance.foreign_repo(instance.read_record(), root)
 
 
 def launcher(repo: Path | None = None) -> Path:
@@ -693,13 +706,19 @@ def start(repo: Path | None = None, config_path: Path | None = None) -> StartRes
             message="Backrec läuft bereits. Das Fenster ist offen, vielleicht hinter einem anderen.",
         )
 
+    foreign = foreign_installation(root)
+    if foreign is not None:
+        logger.info("Aus einem anderen Ordner laeuft bereits eine Fassung: %s", foreign)
+
     executable = launcher(root)
     if not executable.is_file():
         problem = preflight.Problem(
             "Die Arbeitsumgebung des Werkzeugs fehlt.",
             "Setup.cmd in diesem Ordner doppelklicken.",
         )
-        return StartResult(started=False, problem=problem, message=problem.cause)
+        return StartResult(
+            started=False, problem=problem, message=problem.cause, foreign_folder=foreign
+        )
 
     checked = preflight.run(target)
     if not checked.ok:
@@ -707,6 +726,7 @@ def start(repo: Path | None = None, config_path: Path | None = None) -> StartRes
             started=False,
             problem=checked.problem,
             message=checked.problem.cause if checked.problem else "",
+            foreign_folder=foreign,
         )
 
     instance.clear_stop_request()
@@ -727,20 +747,30 @@ def start(repo: Path | None = None, config_path: Path | None = None) -> StartRes
         )
     except OSError as exc:
         logger.error("Start fehlgeschlagen: %s", exc)
-        return StartResult(started=False, message="Backrec ließ sich nicht starten.")
+        return StartResult(
+            started=False,
+            message="Backrec ließ sich nicht starten.",
+            foreign_folder=foreign,
+        )
 
     deadline = time.monotonic() + START_READY_TIMEOUT_SECONDS
     while time.monotonic() < deadline:
         found = instance.running_instance(repo=root)
         if found is not None:
             logger.info("Gestartet (Anwendung %d)", found.pid)
-            return StartResult(started=True, pid=found.pid, message="Backrec läuft.")
+            return StartResult(
+                started=True,
+                pid=found.pid,
+                message="Backrec läuft.",
+                foreign_folder=foreign,
+            )
         time.sleep(START_POLL_SECONDS)
 
     logger.warning("Start angestossen, aber kein Zustandsdatensatz erschienen")
     return StartResult(
         started=False,
         message="Der Start wurde angestoßen, Backrec hat sich aber nicht gemeldet.",
+        foreign_folder=foreign,
     )
 
 
@@ -826,6 +856,7 @@ def status(repo: Path | None = None, config_path: Path | None = None) -> StatusR
         logs_path=paths.logs_dir(),
         state_path=paths.state_dir(),
         repo_path=root,
+        foreign_folder=instance.foreign_repo(record, root),
     )
 
 

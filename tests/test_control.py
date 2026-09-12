@@ -262,6 +262,54 @@ def test_the_uninstall_never_says_the_application_keeps_running(
     assert shortcut_module.RUNNING_UNTOUCHED_NOTE not in result.lines
 
 
+# --- A second installation ----------------------------------------------------
+
+
+def _record_of_another_installation(other: Path) -> None:
+    import json
+    import os
+
+    import psutil
+
+    target = paths.pid_record_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        json.dumps(
+            {
+                "pid": os.getpid(),
+                "create_time": psutil.Process().create_time(),
+                "started": "",
+                "repo": str(other),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_a_second_installation_is_named_and_blocks_nothing(tmp_path: Path) -> None:
+    """Two unpacked copies are two installations - neither may block the other.
+
+    Left unsaid, the two look like one that misbehaves: a window on screen that
+    this folder knows nothing about.
+    """
+    repo = _installed_repo(tmp_path)
+    other = tmp_path / "zweite-installation"
+    _record_of_another_installation(other)
+
+    report = control.status(repo)
+
+    assert report.running is False
+    assert report.foreign_folder == str(other)
+    assert control.foreign_installation(repo) == str(other)
+
+
+def test_no_second_installation_means_no_note(tmp_path: Path) -> None:
+    repo = _installed_repo(tmp_path)
+    instance.clear_record()
+
+    assert control.status(repo).foreign_folder is None
+
+
 # --- Update -------------------------------------------------------------------
 
 

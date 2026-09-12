@@ -107,9 +107,21 @@ def _command_setup(args: argparse.Namespace) -> int:
     return result.code
 
 
+FOREIGN_NOTE = (
+    "Aus einem anderen Ordner läuft bereits eine Fassung von Backrec: {folder}. "
+    "Sie bleibt unberührt."
+)
+
+
 def _command_start(args: argparse.Namespace) -> int:
     ui = _ui()
     result = control.start(config_path=args.config)
+
+    # Never a reason to refuse: two unpacked copies are two installations. But
+    # it is the answer to the question that follows, why a window is on screen
+    # that this folder knows nothing about.
+    if result.foreign_folder:
+        ui.note(FOREIGN_NOTE.format(folder=result.foreign_folder))
 
     if result.already_running:
         ui.ok(result.message)
@@ -148,6 +160,9 @@ def _command_status(args: argparse.Namespace) -> int:
         ui.note(f"Aufnahme läuft: {'ja' if report.recording else 'nein'}")
     else:
         ui.note("Backrec läuft nicht. Nächster Schritt: das Symbol auf dem Desktop anklicken.")
+
+    if report.foreign_folder:
+        ui.note(FOREIGN_NOTE.format(folder=report.foreign_folder))
 
     ui.note(f"Fassung: {report.version}")
     ui.note(f"Symbol auf dem Desktop: {'vorhanden' if report.shortcut_installed else 'keines'}")
