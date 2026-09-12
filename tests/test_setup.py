@@ -210,6 +210,29 @@ def test_a_hard_check_failure_ends_with_a_non_zero_code(calm, tmp_path, monkeypa
     assert "offene Punkte" in printed
 
 
+def test_a_demanded_start_happens_even_with_an_open_point(calm, tmp_path, monkeypatch) -> None:
+    """The update helper stopped the application; it has to come back.
+
+    One warning - a folder offline for a moment - would otherwise leave a
+    colleague after an update with no window and no reason for it.
+    """
+    desktop = Desktop(tmp_path / "Desktop")
+    started: list[bool] = []
+    monkeypatch.setattr(doctor, "run", lambda *_a, **_k: [FAIL_CHECK])
+    monkeypatch.setattr(
+        control,
+        "start",
+        lambda *_a, **_k: started.append(True) or control.StartResult(started=True),
+    )
+
+    result, _printed = run_setup(
+        calm, desktop, monkeypatch, unattended=True, start_after=True
+    )
+
+    assert started == [True]
+    assert result.code == 1
+
+
 # --- Idempotence --------------------------------------------------------------
 
 

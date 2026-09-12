@@ -605,7 +605,13 @@ def setup(
     everything_ok = externals_ready and doctor_ok
     if not everything_ok:
         ui.warn("Noch nicht startklar -- die offenen Punkte stehen oben")
-    elif offer_start:
+
+    # An open point holds the offer back, but never a start that was demanded.
+    # The update helper demands one: it stopped the application for the new
+    # version, and a single warning - a cloud folder offline, a report too many -
+    # would otherwise leave a colleague with no window at all and no idea why.
+    # The start runs its own check and says so if it cannot.
+    if offer_start and (everything_ok or start_after):
         _offer_start(ui, root, target, unattended=unattended, start_after=start_after)
 
     ui.summary(paths.log_path(), _closing_note(everything_ok))
