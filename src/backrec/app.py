@@ -26,6 +26,7 @@ from .delivery import Outcome, discard as discard_takes, finish as finish_record
 from .devices import PYCAW_AVAILABLE, get_default_comm_device_name, get_default_speaker_device_name
 from .logging_setup import bootstrap, get_logger
 from .recording import DEVICE_POLL_SEC, MicRecorder, SystemRecorder
+from .update import UpdatePlan
 
 if PYCAW_AVAILABLE:
     import comtypes
@@ -80,6 +81,27 @@ def short_label(name: str, max_len: int = LABEL_MAX_LEN) -> str:
     if len(cleaned) <= max_len:
         return cleaned
     return cleaned[:max_len - 1].rstrip() + "…"
+
+
+def update_question(decision: UpdatePlan) -> str:
+    """The one question before an update, with both versions in it.
+
+    A pure function so the wording of the case that matters - an archive that is
+    not newer - is checkable without a window. The specification asks for both
+    versions in either case, and for a step older or equal to happen only with
+    explicit consent.
+    """
+    if decision.newer:
+        return (
+            f"Von {decision.installed_version} auf {decision.info.version}.\n\n"
+            "Backrec beendet sich dafür und meldet sich gleich wieder.\n\n"
+            "Jetzt einspielen?"
+        )
+    return (
+        f"Die gewählte Fassung ist nicht neuer: hier läuft "
+        f"{decision.installed_version}, gewählt ist {decision.info.version}.\n\n"
+        "Trotzdem einspielen?"
+    )
 
 
 def menu_entry(label: str, recording: bool) -> tuple[str, str]:
@@ -329,20 +351,46 @@ class RecorderApp(ctk.CTk):
             self.status_label.configure(text=previous)
 
     def _menu_update(self) -> None:
+        """Choose an archive, name both versions, ask once, then act.
+
+        The question comes before the first change, not after: the archive is
+        only read for its version here, and the expensive part - unpacking and
+        checking every file - happens once the answer is yes.
+        """
         log.info("Menue: %s", MENU_UPDATE)
         from tkinter import filedialog, messagebox
 
-        archive = filedialog.askopenfilename(
+        chosen = filedialog.askopenfilename(
             parent=self,
             title="Neue Fassung auswählen",
             filetypes=[("Archiv", "*.zip")],
         )
-        if not archive:
+        if not chosen:
             log.info("Menue: Aktualisieren abgebrochen, keine Datei gewaehlt")
             return
 
+        archive = Path(chosen)
+        decision, problem = control.inspect_archive(archive)
+        if decision is None:
+            messagebox.showwarning(
+                f"{paths.TOOL_NAME}: Aktualisieren", "\n".join(problem), parent=self
+            )
+            return
+
+        if not messagebox.askyesno(
+            f"{paths.TOOL_NAME}: Aktualisieren", update_question(decision), parent=self
+        ):
+            log.info(
+                "Menue: Aktualisieren abgelehnt (%s -> %s)",
+                decision.installed_version,
+                decision.info.version,
+            )
+            return
+
         def work() -> None:
-            result = control.apply_archive(Path(archive))
+            # `allow_older`, because the question above has just been answered
+            # for exactly this case and asking twice is asking nothing.
+            result = control.apply_archive(archive, allow_older=True)
             self.after(
                 0,
                 lambda: messagebox.showinfo(

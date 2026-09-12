@@ -358,6 +358,44 @@ def test_a_missing_helper_leaves_the_previous_state_runnable(
     assert (repo / ".venv" / "pyvenv.cfg").is_file()
 
 
+def test_an_archive_that_is_not_newer_changes_nothing(tmp_path: Path) -> None:
+    """The specification asks for both versions and an explicit yes first."""
+    repo = _installed_repo(tmp_path)
+
+    result = control.apply_archive(_archive(tmp_path, "2026.08.1"), repo, detached=False)
+
+    joined = " ".join(result.lines)
+    assert not result.ok
+    assert "2026.09.1" in joined
+    assert "2026.08.1" in joined
+    assert not repo.with_name(repo.name + ".update").exists()
+    assert not (repo / "README.md").exists()
+
+
+def test_an_older_archive_goes_in_after_an_explicit_yes(tmp_path: Path) -> None:
+    repo = _installed_repo(tmp_path)
+
+    result = control.apply_archive(
+        _archive(tmp_path, "2026.08.1"), repo, detached=False, allow_older=True
+    )
+
+    assert result.ok
+    assert (repo / "README.md").read_text(encoding="utf-8") == "neu"
+
+
+def test_reading_an_archive_unpacks_nothing(tmp_path: Path) -> None:
+    """The window asks before the first change, so this may not make one."""
+    repo = _installed_repo(tmp_path)
+
+    decision, problem = control.inspect_archive(_archive(tmp_path), repo)
+
+    assert problem == ()
+    assert decision is not None
+    assert decision.installed_version == "2026.09.1"
+    assert decision.info.version == "2026.10.1"
+    assert not repo.with_name(repo.name + ".update").exists()
+
+
 def test_updating_without_a_running_instance_mirrors_right_away(tmp_path: Path) -> None:
     repo = _installed_repo(tmp_path)
 

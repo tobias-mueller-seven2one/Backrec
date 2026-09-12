@@ -70,6 +70,11 @@ def build_parser() -> argparse.ArgumentParser:
     update_parser.add_argument(
         "--git", action="store_true", help="Entwicklerweg über die Versionsverwaltung"
     )
+    update_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Auch eine gleiche oder ältere Fassung einspielen",
+    )
 
     logs_parser = subparsers.add_parser("logs", help="Aufzeichnungen (Exit 0, sonst 1)")
     logs_parser.add_argument("--follow", action="store_true", help="Neue Zeilen anzeigen")
@@ -215,7 +220,7 @@ def _command_update(args: argparse.Namespace) -> int:
         ui.note("  2. Im Zahnrad-Menü des Fensters den Eintrag 'Aktualisieren...' wählen.")
         return 0
 
-    result = control.apply_archive(args.archive, detached=False)
+    result = control.apply_archive(args.archive, detached=False, allow_older=args.force)
     _emit(ui, result.lines)
     return result.code
 

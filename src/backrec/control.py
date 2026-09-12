@@ -865,21 +865,63 @@ def follow_logs(stream: TextIO | None = None) -> CommandResult:
 # --- Update, uninstall, release -----------------------------------------------
 
 
+def inspect_archive(
+    archive: Path,
+    repo: Path | None = None,
+) -> tuple[update_module.UpdatePlan | None, tuple[str, ...]]:
+    """Read the archive and compare the two versions. Changes nothing.
+
+    Split out of `apply_archive` so the window can name both versions and ask
+    **before** the first change is made. Only the small accompanying list is
+    read here; unpacking and checking every file comes after the answer.
+    """
+    root = repo or paths.repo_root()
+    try:
+        return update_module.plan(archive, repo=root), ()
+    except update_module.UpdateError as exc:
+        logger.warning("Archiv '%s' nicht verwendbar: %s", archive, exc)
+        return None, (str(exc), "Es wurde nichts verändert.")
+
+
+def _refuse_older(decision: update_module.UpdatePlan) -> CommandResult:
+    return CommandResult(
+        ok=False,
+        code=1,
+        lines=(
+            f"Die gewählte Fassung ist nicht neuer: hier läuft "
+            f"{decision.installed_version}, gewählt ist {decision.info.version}.",
+            "Es wurde nichts verändert. Wer es trotzdem will, bestätigt es ausdrücklich.",
+        ),
+    )
+
+
 def apply_archive(
     archive: Path,
     repo: Path | None = None,
     *,
     detached: bool = True,
+    allow_older: bool = False,
 ) -> CommandResult:
     """Check an archive, stage it alongside and apply it.
+
+    Nothing is unpacked before the two checks the specification puts first: the
+    archive has to belong to this tool, and it has to carry a newer version.
+    `allow_older` is the explicit consent of somebody who was shown both
+    versions and said yes anyway.
 
     While the tool is running a helper outside the folder takes over mirroring
     and restart: a process cannot replace the folder its own code came from.
     """
     root = repo or paths.repo_root()
 
+    decision, problem = inspect_archive(archive, root)
+    if decision is None:
+        return CommandResult(ok=False, code=1, lines=problem)
+
+    if not decision.newer and not allow_older:
+        return _refuse_older(decision)
+
     try:
-        decision = update_module.plan(archive, repo=root)
         staging = update_module.stage(decision.info, repo=root)
     except update_module.UpdateError as exc:
         return CommandResult(ok=False, code=1, lines=(str(exc),))

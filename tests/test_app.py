@@ -14,6 +14,7 @@ import pytest
 
 from backrec import app, instance
 from backrec.delivery import Outcome
+from backrec.update import ArchiveInfo, UpdatePlan
 
 
 @pytest.fixture(scope="module")
@@ -96,6 +97,39 @@ def test_during_a_recording_the_two_long_entries_are_locked_with_a_reason() -> N
         assert state == "disabled"
         assert label in text
         assert "Aufnahme" in text
+
+
+# --- The question before an update --------------------------------------------
+
+
+def _plan(version: str, installed: str, *, newer: bool) -> UpdatePlan:
+    return UpdatePlan(
+        info=ArchiveInfo(
+            archive=Path("Backrec.zip"),
+            tool="Backrec",
+            version=version,
+            top_level="Backrec",
+            entries=(),
+        ),
+        installed_version=installed,
+        newer=newer,
+        same=version == installed,
+    )
+
+
+def test_the_question_before_an_update_names_both_versions() -> None:
+    text = app.update_question(_plan("2026.10.1", "2026.09.1", newer=True))
+
+    assert "2026.09.1" in text
+    assert "2026.10.1" in text
+
+
+def test_an_archive_that_is_not_newer_says_so_before_anything_happens() -> None:
+    text = app.update_question(_plan("2026.08.1", "2026.09.1", newer=False))
+
+    assert "nicht neuer" in text
+    assert "2026.09.1" in text
+    assert "2026.08.1" in text
 
 
 # --- Ending -------------------------------------------------------------------
