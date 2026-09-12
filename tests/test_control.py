@@ -247,6 +247,21 @@ def test_uninstall_removes_the_desktop_icon(tmp_path: Path, monkeypatch) -> None
     assert not (desktop / shortcut_module.SHORTCUT_NAME).exists()
 
 
+def test_the_uninstall_never_says_the_application_keeps_running(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """It stops the application first - the note of the icon command contradicts that."""
+    repo = _installed_repo(tmp_path)
+    desktop = tmp_path / "Desktop"
+    desktop.mkdir()
+    (desktop / shortcut_module.SHORTCUT_NAME).write_text("lnk", encoding="utf-8")
+    monkeypatch.setattr(control, "_runs_from", lambda _repo: False)
+
+    result = control.uninstall(repo, desktop=desktop)
+
+    assert shortcut_module.RUNNING_UNTOUCHED_NOTE not in result.lines
+
+
 # --- Update -------------------------------------------------------------------
 
 

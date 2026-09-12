@@ -1119,7 +1119,15 @@ def uninstall(
         # open and the removal would fail item by item with the same cause.
         return CommandResult(ok=False, code=1, lines=(stopped.message,))
 
-    lines.extend(shortcut_module.remove(desktop).lines)
+    # Without the filter the output contradicts itself within two lines: the
+    # removal of the icon ends on "a running application keeps running", and
+    # right above it stands the sentence that this one was just stopped. That
+    # note belongs to the icon command on its own, not here.
+    lines.extend(
+        line
+        for line in shortcut_module.remove(desktop).lines
+        if line != shortcut_module.RUNNING_UNTOUCHED_NOTE
+    )
 
     venv = root / ".venv"
     if not venv.is_dir():
