@@ -180,6 +180,19 @@ def test_the_update_helper_starts_the_tool_again() -> None:
     assert "'--unattended', '--start'" in content
 
 
+def test_the_update_helper_does_not_wait_for_the_tool_it_restarts() -> None:
+    """`-Wait` waits for the process *and every descendant* of it.
+
+    The setup starts Backrec detached at the end, so this window would stay open
+    for as long as Backrec runs and never say that it is finished.
+    """
+    content = (ROOT / "scripts" / "win" / "apply-update.ps1").read_text(encoding="utf-8")
+    code = "\n".join(line for line in content.splitlines() if not line.lstrip().startswith("#"))
+
+    assert "-Wait " not in code
+    assert "WaitForExit()" in code
+
+
 def test_the_helper_scripts_stay_within_powershell_5() -> None:
     """Windows 11 ships 5.1; anything newer is an extra installation.
 

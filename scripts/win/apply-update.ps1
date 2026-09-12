@@ -141,10 +141,15 @@ if (-not (Test-Path $einrichten)) {
     exit 1
 }
 
+# -PassThru mit WaitForExit statt -Wait: -Wait wartet auf den Vorgang *und alle
+# seine Nachkommen*, und das Einrichten startet Backrec zum Schluss abgekoppelt.
+# Damit wartete dieses Fenster, solange Backrec laeuft -- also bis zum Feierabend,
+# ohne je "fertig" zu sagen.
 $lauf = Start-Process -FilePath $einrichten `
                       -ArgumentList '--unattended', '--start' `
                       -WorkingDirectory $RepoPath `
-                      -NoNewWindow -Wait -PassThru
+                      -NoNewWindow -PassThru
+$lauf.WaitForExit()
 $code = $lauf.ExitCode
 Write-Zeile "Einrichtung beendet (Ergebnis $code)."
 
