@@ -125,6 +125,31 @@ def test_start_uses_the_interpreter_of_the_environment_by_absolute_path(
     assert launched[0][1:] == ["-m", "backrec"]
 
 
+def test_starting_opens_the_window_and_not_a_process_without_one(tmp_path: Path) -> None:
+    """Step 7, Start.cmd and the icon take one and the same route (H4).
+
+    Backrec has no tray icon and therefore no arrow of the hidden icons to point
+    at: here the window itself is what the colleague sees after "Jetzt starten?",
+    so the start has to be the one the icon performs, module and all.
+    """
+    installed = _installed_repo(tmp_path)
+    spec = shortcut_module.build_spec(installed)
+
+    command = control.start_command(installed)
+
+    assert command == [spec.target, *spec.arguments.split()]
+    assert command[1:] == ["-m", "backrec"], "das Modul, das das Fenster öffnet"
+
+
+def test_the_closing_line_points_at_the_desktop_and_the_window(tmp_path: Path) -> None:
+    """No tray, no arrow: the sentence about the hidden icons would mislead."""
+    closing = control._closing_note(True)
+
+    assert "Symbol liegt auf dem Desktop" in closing
+    assert "Pfeil" not in closing
+    assert "Uhr" not in closing
+
+
 def test_a_second_start_reports_the_running_instance(tmp_path: Path, monkeypatch) -> None:
     installed = _installed_repo(tmp_path)
     record = instance.write_record(repo=installed)

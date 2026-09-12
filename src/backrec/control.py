@@ -204,6 +204,19 @@ def launcher(repo: Path | None = None) -> Path:
     return shortcut_module.launcher(repo)
 
 
+def start_command(repo: Path | None = None) -> list[str]:
+    """The command line that opens the window - the one the icon carries too.
+
+    Kept in one place so the three ways in cannot drift apart: whatever the
+    desktop icon starts, `Start.cmd` and step 7 of the setup start as well.
+    Backrec has no tray icon, so the window *is* the proof that the start
+    worked; a route that only launched a loop without one would satisfy every
+    check on processes and leave the colleague looking at nothing.
+    """
+    root = repo or paths.repo_root()
+    return [str(launcher(root)), *shortcut_module.LAUNCH_ARGUMENTS.split()]
+
+
 def read_installed_version(path: Path | None = None) -> str | None:
     """The version that was last set up successfully."""
     target = path or paths.installed_record_path()
@@ -756,7 +769,7 @@ def start(repo: Path | None = None, config_path: Path | None = None) -> StartRes
 
     try:
         subprocess.Popen(
-            [str(executable), "-m", "backrec"],
+            start_command(root),
             cwd=str(root),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
