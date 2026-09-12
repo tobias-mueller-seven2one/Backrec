@@ -331,6 +331,22 @@ def _package_is_stale(repo: Path) -> bool:
     return newest > installed_at
 
 
+def _sync_blocked_by_itself(detail: str) -> bool:
+    """Whether the environment could not be replaced because we run out of it.
+
+    Windows does not release a running program file, so a sync started through
+    the environment's own entry point fails on exactly that file. Worth telling
+    apart: the plain message sends the reader to their internet connection, and
+    the actual fix is the route that stands outside the environment.
+    """
+    lowered = detail.lower()
+    denied = any(
+        marker in lowered
+        for marker in ("os error 5", "zugriff verweigert", "access is denied", "permission denied")
+    )
+    return denied and ".venv" in lowered
+
+
 def _ensure_environment(assistant: Assistant, repo: Path) -> bool:
     """Step 2: the environment built from the locked list.
 
@@ -348,6 +364,14 @@ def _ensure_environment(assistant: Assistant, repo: Path) -> bool:
     if result.returncode != 0:
         detail = (result.stderr or result.stdout or "").strip()
         logger.error("Aufbau der Arbeitsumgebung fehlgeschlagen: %s", detail[:2000])
+        if _sync_blocked_by_itself(detail):
+            assistant.fail(
+                "Die Arbeitsumgebung lässt sich von hier aus nicht nachziehen, "
+                "weil dieser Vorgang aus ihr heraus läuft.",
+                "Setup.cmd in diesem Ordner doppelklicken -- dieser Weg steht daneben "
+                "und kommt deshalb daran.",
+            )
+            return False
         assistant.fail(
             "Die Arbeitsumgebung ließ sich nicht aufbauen.",
             "Internetverbindung prüfen und Setup.cmd erneut doppelklicken; "

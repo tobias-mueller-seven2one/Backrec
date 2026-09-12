@@ -122,6 +122,38 @@ def test_both_failed_routes_to_the_helper_are_named_separately(monkeypatch) -> N
     assert "Setup.cmd erneut" in printed
 
 
+def test_a_sync_blocked_by_the_running_program_names_the_right_way_out(monkeypatch) -> None:
+    """Windows does not release a running program file.
+
+    The plain message would send the reader to their internet connection, and
+    the actual fix is the route that stands outside the environment.
+    """
+    import subprocess
+
+    stream = io.StringIO()
+    assistant = Assistant(total_steps=1, stream=stream, interactive=False, color=False)
+    monkeypatch.setattr(
+        control,
+        "_run",
+        lambda command, **_k: subprocess.CompletedProcess(
+            args=command,
+            returncode=2,
+            stdout="",
+            stderr=(
+                r"error: failed to remove file `C:\x\.venv\Scripts\backrec.exe`: "
+                "Zugriff verweigert (os error 5)"
+            ),
+        ),
+    )
+
+    assert control._ensure_environment(assistant, Path(r"C:\x")) is False
+
+    printed = stream.getvalue()
+    assert "aus ihr heraus läuft" in printed
+    assert "Setup.cmd" in printed
+    assert "Internetverbindung" not in printed
+
+
 def test_an_existing_helper_is_never_fetched_again(monkeypatch) -> None:
     stream = io.StringIO()
     assistant = Assistant(total_steps=1, stream=stream, interactive=False, color=False)
