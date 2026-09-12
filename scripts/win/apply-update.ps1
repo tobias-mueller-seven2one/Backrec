@@ -149,8 +149,13 @@ $lauf = Start-Process -FilePath $einrichten `
                       -ArgumentList '--unattended', '--start' `
                       -WorkingDirectory $RepoPath `
                       -NoNewWindow -PassThru
+# Das Abfragen von .Handle merkt sich die Kennung des Vorgangs. Ohne diese Zeile
+# bleibt .ExitCode nach dem Warten leer -- und dann sagte dieses Fenster nach
+# jedem gelungenen Aktualisieren, es sei noch etwas offen.
+$null = $lauf.Handle
 $lauf.WaitForExit()
 $code = $lauf.ExitCode
+if ($null -eq $code) { $code = 1 }
 Write-Zeile "Einrichtung beendet (Ergebnis $code)."
 
 if ($code -eq 0) {

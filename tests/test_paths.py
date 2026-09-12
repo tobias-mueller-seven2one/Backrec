@@ -54,6 +54,20 @@ def test_the_override_wins_over_every_search(tmp_path, monkeypatch):
     assert paths.repo_root() == tmp_path / "eigener-ordner"
 
 
+def test_the_override_comes_back_in_its_canonical_spelling(tmp_path, monkeypatch):
+    """The folder is compared as text - against a record and against a shortcut.
+
+    A relative or an abbreviated spelling would read as a different installation
+    and make a running instance or an existing icon look like somebody else's.
+    """
+    folder = tmp_path / "eigener-ordner"
+    folder.mkdir()
+    monkeypatch.setenv(paths.ENV_HOME, str(tmp_path / "eigener-ordner" / "." / ""))
+
+    assert paths.repo_root() == folder.resolve()
+    assert paths.repo_root().is_absolute()
+
+
 def test_the_repository_of_this_working_tree_carries_its_marker():
     root = paths.repo_root()
 

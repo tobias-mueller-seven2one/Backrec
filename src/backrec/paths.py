@@ -61,6 +61,14 @@ REPO_MARKERS: tuple[str, ...] = (
 _INSTALL_DIR_NAME = "site-packages"
 
 
+def _resolved(folder: Path) -> Path:
+    """The canonical spelling of `folder`, or the folder itself if that fails."""
+    try:
+        return folder.resolve()
+    except OSError:
+        return folder
+
+
 def has_repo_marker(folder: Path) -> bool:
     """Whether `folder` looks like this tool's folder."""
     return any((folder / name).is_file() for name in REPO_MARKERS)
@@ -85,7 +93,10 @@ def repo_root(env: Mapping[str, str] | None = None) -> Path:
     environ = os.environ if env is None else env
     override = environ.get(ENV_HOME, "").strip()
     if override:
-        return Path(os.path.expandvars(override)).expanduser()
+        # Resolved, like the route below: the recorded folder of an instance and
+        # the working directory of a shortcut are compared as text, and a short
+        # 8.3 spelling or a relative one would read as a different installation.
+        return _resolved(Path(os.path.expandvars(override)).expanduser())
 
     module_dir = Path(__file__).resolve().parent
     fallback: Path | None = None
