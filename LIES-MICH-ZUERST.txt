@@ -1,0 +1,35 @@
+﻿Backrec nimmt Mikrofon und Systemton eines Gesprächs auf.
+Du brauchst es, wenn du eine Besprechung mitschneiden und nachlesen willst.
+
+Was du brauchst
+  Windows 11 und eine Internetverbindung beim Einrichten.
+  Ein Mikrofon. Sonst nichts: alles Weitere holt sich das Einrichten selbst.
+
+So richtest du es ein
+  1. Setup.cmd doppelklicken.
+  2. Bei der Windows-Warnung auf "Weitere Informationen" klicken und dann
+     auf "Trotzdem ausführen".
+  3. Alle Fragen mit der Eingabetaste bestätigen. Es dauert ein paar Minuten.
+  4. Das Einrichten legt dir das Symbol auf den Desktop.
+  5. Fertig. Das Symbol liegt auf dem Desktop.
+
+Im Alltag
+  Doppelklick auf das Symbol öffnet ein kleines Fenster.
+  REC beginnt die Aufnahme, STOP beendet sie und legt sie für dich ab.
+  Das Zahnrad oben im Fenster öffnet das Menü.
+
+Wenn etwas rot ist
+  Klicke auf das Zahnrad und dann auf "Diagnose". Es öffnet sich eine Datei.
+  Schicke diese Datei an Tobias.
+
+Aktualisieren
+  Neue Fassung über den Ordner entpacken und Setup.cmd erneut doppelklicken.
+  Oder im Zahnrad-Menü auf "Aktualisieren..." klicken.
+
+Entfernen
+  Schließe das Fenster.
+  Lösche das Symbol vom Desktop.
+  Lösche danach den Ordner, in den du das Archiv entpackt hast.
+
+Fragen? Tobias Müller hilft dir weiter.
+Alles Technische steht in README.md, das brauchst du nicht.
