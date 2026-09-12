@@ -371,8 +371,8 @@ def _ensure_environment(assistant: Assistant, repo: Path) -> bool:
     return True
 
 
-def _configure(assistant: Assistant, unattended: bool, config_path: Path, repo: Path) -> bool:
-    """Step 3: take over existing settings, migrate an old file, or ask."""
+def _settle_settings(assistant: Assistant, unattended: bool, config_path: Path, repo: Path) -> bool:
+    """Existing settings, a migrated `.env`, or the wizard - in that order."""
     if config_path.is_file():
         assistant.ok(f"Die Einstellungen gibt es schon ({config_path}) -- unverändert übernommen")
         return True
@@ -383,9 +383,7 @@ def _configure(assistant: Assistant, unattended: bool, config_path: Path, repo: 
             f"Frühere Einstellungen aus {migration.source} übernommen nach {migration.target}"
         )
         assistant.note(f"Übernommen wurden: {', '.join(migration.keys)}.")
-        assistant.note(
-            f"Die alte Datei {migration.source} bleibt liegen, wirkt aber nicht mehr."
-        )
+        assistant.note(f"Die alte Datei {migration.source} bleibt liegen, wirkt aber nicht mehr.")
         return True
 
     if migration.missing:
@@ -405,6 +403,35 @@ def _configure(assistant: Assistant, unattended: bool, config_path: Path, repo: 
         return False
 
     assistant.ok(f"Einstellungen angelegt: {result.config_path}")
+    return True
+
+
+def _configure(assistant: Assistant, unattended: bool, config_path: Path, repo: Path) -> bool:
+    """Step 3: settle the settings, then make sure both folders exist.
+
+    Creating them belongs here and not only to the wizard. Two of the three ways
+    into this step - settings that were already there, and a migrated `.env` -
+    never pass through the wizard, and the check two steps later would then
+    report both folders as missing on a machine where nothing is wrong. The
+    start creates them too (design D5); doing it here as well is what makes the
+    check meaningful.
+    """
+    if not _settle_settings(assistant, unattended, config_path, repo):
+        return False
+
+    try:
+        settled = config_module.load_config(config_path, create_dirs=True)
+    except config_module.ConfigError as exc:
+        logger.error("Eingestellte Ordner nicht verwendbar: %s", exc, exc_info=True)
+        assistant.fail(
+            "Die eingestellten Ordner lassen sich nicht anlegen.",
+            "Die Einstellungen prüfen oder einen anderen Ordner wählen, "
+            "danach Setup.cmd erneut doppelklicken.",
+        )
+        return False
+
+    assistant.note(f"Aufnahmeordner: {settled.recording_dir}")
+    assistant.note(f"Zielordner: {settled.target_dir}")
     return True
 
 

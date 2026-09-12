@@ -371,6 +371,56 @@ def test_an_existing_env_is_taken_over_once_and_left_lying(
     assert "wirkt aber nicht mehr" in printed
 
 
+def test_settings_that_were_already_there_still_get_their_folders(
+    calm, tmp_path, monkeypatch
+) -> None:
+    """Neither of the two ways past the wizard would otherwise create them."""
+    desktop = Desktop(tmp_path / "Desktop")
+    recording = tmp_path / "Vorgegeben" / "Recording"
+    target = tmp_path / "Vorgegeben" / "Input"
+    write_config(
+        paths.config_path(), {"recording_dir": str(recording), "target_dir": str(target)}, repo=calm
+    )
+
+    result, _printed = run_setup(calm, desktop, monkeypatch, unattended=True)
+
+    assert result.ok
+    assert recording.is_dir()
+    assert target.is_dir()
+
+
+def test_a_migrated_env_gets_its_folders_too(calm, tmp_path, monkeypatch) -> None:
+    desktop = Desktop(tmp_path / "Desktop")
+    recording = tmp_path / "Alt" / "Recording"
+    target = tmp_path / "Alt" / "Input"
+    (calm / paths.LEGACY_CONFIG_FILE_NAME).write_text(
+        f"BACKREC_RECORDING_DIR={recording}\nBACKREC_TARGET_DIR={target}\n", encoding="utf-8"
+    )
+
+    result, _printed = run_setup(calm, desktop, monkeypatch, unattended=True)
+
+    assert result.ok
+    assert recording.is_dir()
+    assert target.is_dir()
+
+
+def test_folders_that_cannot_be_created_end_the_run(calm, tmp_path, monkeypatch) -> None:
+    desktop = Desktop(tmp_path / "Desktop")
+    blocker = tmp_path / "blocker"
+    blocker.write_text("", encoding="utf-8")
+    write_config(
+        paths.config_path(),
+        {"recording_dir": str(blocker / "Recording"), "target_dir": str(tmp_path / "Input")},
+        repo=calm,
+    )
+
+    result, printed = run_setup(calm, desktop, monkeypatch, unattended=True)
+
+    assert not result.ok
+    assert result.code == 2
+    assert "lassen sich nicht anlegen" in printed
+
+
 def test_an_existing_settings_file_beats_an_old_env(calm, tmp_path, monkeypatch) -> None:
     desktop = Desktop(tmp_path / "Desktop")
     (calm / paths.LEGACY_CONFIG_FILE_NAME).write_text(
