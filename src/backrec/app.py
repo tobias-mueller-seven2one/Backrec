@@ -18,6 +18,8 @@ import time
 import tkinter as tk
 from datetime import datetime
 from pathlib import Path
+from types import TracebackType
+from typing import Callable
 
 import customtkinter as ctk
 
@@ -259,7 +261,12 @@ class RecorderApp(ctk.CTk):
         self._lock_window_size()
         self._poll_ui_loop()
 
-    def report_callback_exception(self, exc_type, exc_value, traceback_object) -> None:
+    def report_callback_exception(
+        self,
+        exc_type: type[BaseException],
+        exc_value: BaseException,
+        traceback_object: TracebackType | None,
+    ) -> None:
         """Tk hands an exception in a callback to stderr - which is None here.
 
         Without this override the process keeps a window that no longer reacts,
@@ -273,10 +280,10 @@ class RecorderApp(ctk.CTk):
 
     # --- The gear menu ------------------------------------------------------
 
-    def _install_tooltip(self, widget, text: str) -> None:
+    def _install_tooltip(self, widget: ctk.CTkButton, text: str) -> None:
         """A gear without a label is not self-explanatory for this audience."""
 
-        def show(_event=None) -> None:
+        def show(_event: object = None) -> None:
             if self._tooltip is not None:
                 return
             tip = ctk.CTkToplevel(self)
@@ -289,7 +296,7 @@ class RecorderApp(ctk.CTk):
             tip.geometry(f"+{widget.winfo_rootx() - 150}+{widget.winfo_rooty() + 24}")
             self._tooltip = tip
 
-        def hide(_event=None) -> None:
+        def hide(_event: object = None) -> None:
             if self._tooltip is not None:
                 self._tooltip.destroy()
                 self._tooltip = None
@@ -322,7 +329,7 @@ class RecorderApp(ctk.CTk):
         finally:
             self._menu.grab_release()
 
-    def _in_background(self, label: str, work) -> None:
+    def _in_background(self, label: str, work: Callable[[], None]) -> None:
         """Runs a long menu action with the menu locked and the window talking."""
         if self._menu_busy:
             return
@@ -598,7 +605,7 @@ class RecorderApp(ctk.CTk):
         self._set_busy("stopping")
         threading.Thread(target=self._do_stop, daemon=True).start()
 
-    def _do_stop(self, then_exit: bool = False):
+    def _do_stop(self, then_exit: bool = False) -> None:
         outcome: Outcome | None = None
         try:
             if self.mic_recorder is not None:
@@ -650,7 +657,7 @@ class RecorderApp(ctk.CTk):
         message: str,
         then_exit: bool = False,
         outcome: Outcome | None = None,
-    ):
+    ) -> None:
         self._busy = False
         self._refresh_status()
         self.status_label.configure(text=message, text_color=TEXT_MUTED)
@@ -772,7 +779,7 @@ class RecorderApp(ctk.CTk):
             self.btn_stop.configure(state="disabled", text_color=TEXT_MUTED)
             self.btn_discard.configure(state="disabled", text_color=TEXT_MUTED, fg_color=BTN_IDLE)
 
-    def _poll_ui_loop(self):
+    def _poll_ui_loop(self) -> None:
         """The clock of the window. It has to survive its own mistakes.
 
         Everything the application still notices while it stands open rides in
@@ -790,7 +797,7 @@ class RecorderApp(ctk.CTk):
             except tk.TclError:
                 log.debug("Anzeigeschleife endet mit dem Fenster")
 
-    def _poll_ui_once(self):
+    def _poll_ui_once(self) -> None:
         self._enforce_window_size()
 
         # The loop that already defends the window geometry is the only clock
@@ -893,7 +900,7 @@ def _report_unexpected() -> None:
         log.error("Hinweis auf den unerwarteten Fehler liess sich nicht anzeigen", exc_info=True)
 
 
-def _thread_failed(args) -> None:
+def _thread_failed(args: threading.ExceptHookArgs) -> None:
     """An uncaught exception in a worker thread, into the log instead of nowhere.
 
     The default hook writes to stderr, and under `pythonw` there is none. A
