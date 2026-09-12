@@ -288,6 +288,15 @@ def mirror(
         shutil.copy2(source, destination)
         copied += 1
 
+    # The accompanying list does not list itself, so mirroring by list alone
+    # leaves the previous release's copy lying in the folder. The next setup
+    # then measures the files that were just installed against a list that
+    # predates them, takes them for leftovers and deletes them - every file new
+    # in the release, right after it arrived.
+    source_manifest = staging / MANIFEST_NAME
+    if source_manifest.is_file():
+        shutil.copy2(source_manifest, root / MANIFEST_NAME)
+
     known = previous if previous is not None else read_installed_manifest()
     removed = remove_stale(root, stale_files(known, info.entries))
 

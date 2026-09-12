@@ -147,6 +147,39 @@ def test_the_bootstrap_reinstalls_this_package() -> None:
     assert "--reinstall-package backrec" in content
 
 
+def test_the_update_helper_calls_the_setup_by_its_full_path() -> None:
+    """`Push-Location` moves the session, not the folder a child process inherits.
+
+    Called by its bare name the setup was looked for wherever Backrec had been
+    started from - and an update ended with mirrored files, an environment that
+    was never brought up to date and no restart at all.
+    """
+    content = (ROOT / "scripts" / "win" / "apply-update.ps1").read_text(encoding="utf-8")
+
+    assert "Join-Path $RepoPath 'Setup.cmd'" in content
+    assert "-WorkingDirectory $RepoPath" in content
+    assert "cmd.exe /c" not in content
+
+
+def test_the_update_helper_puts_the_new_list_into_the_folder() -> None:
+    """Without it the setup right afterwards deletes what just arrived.
+
+    The accompanying list does not list itself, so mirroring by list leaves the
+    previous release's copy in the folder - and every file new in this release
+    then looks like a leftover of the one before.
+    """
+    content = (ROOT / "scripts" / "win" / "apply-update.ps1").read_text(encoding="utf-8")
+
+    assert "Join-Path $RepoPath 'release-manifest.json'" in content
+
+
+def test_the_update_helper_starts_the_tool_again() -> None:
+    """It stopped the tool for this update; it has to bring it back."""
+    content = (ROOT / "scripts" / "win" / "apply-update.ps1").read_text(encoding="utf-8")
+
+    assert "'--unattended', '--start'" in content
+
+
 def test_the_helper_scripts_stay_within_powershell_5() -> None:
     """Windows 11 ships 5.1; anything newer is an extra installation.
 

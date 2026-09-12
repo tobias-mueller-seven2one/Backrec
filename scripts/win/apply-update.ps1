@@ -91,6 +91,10 @@ foreach ($relativ in $neueDateien) {
     Copy-Item -Path $quelle -Destination $ziel -Force
     $gespiegelt++
 }
+# Die Liste fuehrt sich nicht selbst auf. Ohne diese Zeile bliebe die Liste der
+# vorherigen Fassung im Ordner stehen -- und die Einrichtung gleich danach haelt
+# jede Datei, die neu in dieser Fassung ist, fuer eine Altlast und loescht sie.
+Copy-Item -Path $neueListe -Destination (Join-Path $RepoPath 'release-manifest.json') -Force
 Write-Zeile "$gespiegelt Datei(en) uebernommen."
 
 # --- Altdateien entfernen ----------------------------------------------------
@@ -120,11 +124,28 @@ Remove-Item -Path $StagingPath -Recurse -Force -ErrorAction SilentlyContinue
 # Stand weiterlaufen. Beide Skripte stehen ausserhalb der Arbeitsumgebung, und
 # genau das ist die Voraussetzung. Wer diesen Aufruf ersetzt, muss das Neu-
 # Einrichten des eigenen Pakets mitnehmen.
+#
+# Start-Process mit vollem Pfad, nicht "cmd /c Setup.cmd": Push-Location setzt
+# nur den Ort dieser Sitzung, nicht das Arbeitsverzeichnis, das ein Kindprozess
+# erbt. Das startende cmd suchte Setup.cmd deshalb dort, wo Backrec gestartet
+# wurde, fand nichts -- und das Aktualisieren endete mit gespiegelten Dateien,
+# ohne nachgezogene Arbeitsumgebung und ohne Neustart.
 Write-Zeile 'Die Einrichtung wird ohne Rueckfragen nachgezogen.'
-Push-Location $RepoPath
-& cmd.exe /c "Setup.cmd --unattended --start"
-$code = $LASTEXITCODE
-Pop-Location
+$einrichten = Join-Path $RepoPath 'Setup.cmd'
+if (-not (Test-Path $einrichten)) {
+    Write-Zeile "Abbruch: $einrichten gibt es nicht."
+    Write-Host ''
+    Write-Host 'Was ist passiert: Im Ordner von Backrec fehlt die Datei zum Einrichten.'
+    Write-Host 'Was tun: Die neue Fassung noch einmal ueber den Ordner entpacken.'
+    Start-Sleep -Seconds 10
+    exit 1
+}
+
+$lauf = Start-Process -FilePath $einrichten `
+                      -ArgumentList '--unattended', '--start' `
+                      -WorkingDirectory $RepoPath `
+                      -NoNewWindow -Wait -PassThru
+$code = $lauf.ExitCode
 Write-Zeile "Einrichtung beendet (Ergebnis $code)."
 
 if ($code -eq 0) {

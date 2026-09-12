@@ -172,6 +172,28 @@ def test_mirroring_copies_the_new_files_into_the_existing_folder(tmp_path: Path)
     assert (root / "src" / "backrec" / "app.py").is_file()
 
 
+def test_mirroring_replaces_the_accompanying_list_in_the_folder(tmp_path: Path) -> None:
+    """The list does not list itself, so mirroring by list alone leaves the old one.
+
+    The setup right afterwards measures the files that just arrived against
+    whatever list lies in the folder - and every file new in this release looks
+    like a leftover of the previous one.
+    """
+    root = installed(tmp_path)
+    (root / release.MANIFEST_NAME).write_text(
+        json.dumps({"tool": "Backrec", "version": "2026.09.1", "files": []}), encoding="utf-8"
+    )
+    bundle = archive(tmp_path, {"README.md": "neu", "neu.txt": "erst jetzt dabei"})
+    info = update.inspect(bundle)
+    staged = update.stage(info, tmp_path / "staging")
+
+    update.mirror(staged, info, root, previous=())
+
+    listed = json.loads((root / release.MANIFEST_NAME).read_text(encoding="utf-8"))
+    assert listed["version"] == info.version
+    assert {entry["path"] for entry in listed["files"]} == {"README.md", "neu.txt"}
+
+
 def test_mirroring_leaves_the_built_environment_alone(tmp_path: Path) -> None:
     root = installed(tmp_path)
     bundle = archive(tmp_path, {"README.md": "neu"})
