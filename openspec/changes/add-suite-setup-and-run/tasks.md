@@ -9,12 +9,12 @@
 
 ## 2. Aufteilung von `main.pyw` ohne Verhaltensänderung
 
-- [ ] 2.1 `main.pyw:87-104` (`short_label`, `unique_destination`) und `main.pyw:107-136` (`merge_audio_files`) nach `src/backrec/merge.py` bzw. `src/backrec/delivery.py` verschieben und verifizieren, dass der Mischbefehl zeichengleich zu `main.pyw:109-119` bleibt (design.md D1)
-- [ ] 2.2 `main.pyw:139-200` (Abfragen der Standardgeräte über pycaw) nach `src/backrec/devices.py` verschieben und verifizieren, dass die Namen der Standardgeräte auf dem Entwicklungsrechner unverändert gemeldet werden (design.md D1)
-- [ ] 2.3 Aufnahmekern (`main.pyw:203-400`, `MicRecorder`, `SystemRecorder`, Aufnahmeschleife, COM-Initialisierung pro Thread) nach `src/backrec/recording.py` verschieben, ohne eine Zeile Logik zu ändern, und verifizieren, dass eine vollständige Aufnahme mit Gerätewechsel dieselben drei Dateien wie vorher erzeugt (design.md D1)
-- [ ] 2.4 GUI (`main.pyw:430-903`) nach `src/backrec/app.py` verschieben, Modulebenen-Nebenwirkungen (`main.pyw:37-38`) entfernen und verifizieren, dass das Fenster in Größe (280 px, `main.pyw:63`), Bedienung und Statuszeilen unverändert erscheint (design.md D1, D5)
-- [ ] 2.5 `main.pyw` auf einen Aufruf von `backrec.app` reduzieren und verifizieren, dass der bisherige manuelle Weg aus `README.md:33-38` mit `pythonw main.pyw` weiterhin zum Fenster führt
-- [ ] 2.6 Abnahme der Verschiebung: eine vollständige Aufnahme (REC, Gerätewechsel, Mute beider Quellen, STOP) und eine verworfene Aufnahme durchführen und verifizieren, dass Dateinamen, Verbleib der Rohspuren und die Zielkopie identisch zum Stand vor der Aufteilung sind
+- [x] 2.1 `main.pyw:87-104` (`short_label`, `unique_destination`) und `main.pyw:107-136` (`merge_audio_files`) nach `src/backrec/merge.py` bzw. `src/backrec/delivery.py` verschieben und verifizieren, dass der Mischbefehl zeichengleich zu `main.pyw:109-119` bleibt (design.md D1)
+- [x] 2.2 `main.pyw:139-200` (Abfragen der Standardgeräte über pycaw) nach `src/backrec/devices.py` verschieben und verifizieren, dass die Namen der Standardgeräte auf dem Entwicklungsrechner unverändert gemeldet werden (design.md D1)
+- [ ] 2.3 Aufnahmekern (`main.pyw:203-400`, `MicRecorder`, `SystemRecorder`, Aufnahmeschleife, COM-Initialisierung pro Thread) nach `src/backrec/recording.py` verschieben, ohne eine Zeile Logik zu ändern, und verifizieren, dass eine vollständige Aufnahme mit Gerätewechsel dieselben drei Dateien wie vorher erzeugt (design.md D1) (wartet auf Abnahme durch Tobias)
+- [x] 2.4 GUI (`main.pyw:430-903`) nach `src/backrec/app.py` verschieben, Modulebenen-Nebenwirkungen (`main.pyw:37-38`) entfernen und verifizieren, dass das Fenster in Größe (280 px, `main.pyw:63`), Bedienung und Statuszeilen unverändert erscheint (design.md D1, D5)
+- [x] 2.5 `main.pyw` auf einen Aufruf von `backrec.app` reduzieren und verifizieren, dass der bisherige manuelle Weg aus `README.md:33-38` mit `pythonw main.pyw` weiterhin zum Fenster führt
+- [ ] 2.6 Abnahme der Verschiebung: eine vollständige Aufnahme (REC, Gerätewechsel, Mute beider Quellen, STOP) und eine verworfene Aufnahme durchführen und verifizieren, dass Dateinamen, Verbleib der Rohspuren und die Zielkopie identisch zum Stand vor der Aufteilung sind (wartet auf Abnahme durch Tobias)
 
 ## 3. Pfade, Protokollierung und Zustand
 
