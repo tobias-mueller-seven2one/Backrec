@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from backrec import app, instance
+from backrec.delivery import Outcome
 
 
 @pytest.fixture(scope="module")
@@ -211,3 +212,110 @@ def test_the_polling_loop_stays_quiet_without_a_request(window, monkeypatch) -> 
     window._poll_ui_loop()
 
     assert asked == []
+
+
+def test_the_polling_loop_survives_a_mistake_of_its_own(window, monkeypatch) -> None:
+    """It is the only clock the application has.
+
+    An exception used to end the chain of calls for good: the window stayed on
+    screen, a stop from outside ran into its deadline, and the reason was
+    nowhere - Tk reports into a channel that does not exist here.
+    """
+    rearmed: list[int] = []
+
+    def boom() -> None:
+        raise RuntimeError("kaputt")
+
+    monkeypatch.setattr(window, "_poll_ui_once", boom)
+    monkeypatch.setattr(window, "after", lambda delay, _callback: rearmed.append(delay))
+
+    window._poll_ui_loop()
+
+    assert rearmed == [app.UI_POLL_MS]
+
+
+# --- The visible failure ------------------------------------------------------
+
+
+FAILED = Outcome(
+    ok=False,
+    status="no result: mixer missing",
+    cause="Das Programm zum Zusammenmischen ist nicht aufrufbar.",
+    whereabouts="Beide Spuren liegen weiterhin in C:\\Aufnahmen.",
+)
+
+
+class Label:
+    def configure(self, **_kwargs) -> None:
+        pass
+
+
+class Finishing:
+    """Only what `_finish_stop` touches - the order of two steps is under test."""
+
+    def __init__(self, *, silent: bool) -> None:
+        self._busy = True
+        self._silent_failures = silent
+        self.status_label = Label()
+        self.order: list[str] = []
+
+    def _refresh_status(self) -> None:
+        pass
+
+    def _report_failure(self, _outcome) -> None:
+        self.order.append("meldung")
+
+    def _finalize_exit(self) -> None:
+        self.order.append("ende")
+
+    def after(self, _delay, _callback) -> None:
+        self.order.append("geplant")
+
+
+def test_a_failed_close_shows_its_message_before_the_window_may_go() -> None:
+    """The dialog is the only place naming where the takes stayed.
+
+    Scheduled the other way round it is torn down by the exit a second later -
+    unread, and on exactly the route where a recording is at stake.
+    """
+    stub = Finishing(silent=False)
+
+    app.RecorderApp._finish_stop(stub, "no result", then_exit=True, outcome=FAILED)
+
+    assert stub.order == ["meldung", "geplant"]
+
+
+def test_a_stop_from_outside_closes_without_a_dialog() -> None:
+    stub = Finishing(silent=True)
+
+    app.RecorderApp._finish_stop(stub, "no result", then_exit=True, outcome=FAILED)
+
+    assert stub.order == ["geplant"]
+
+
+def test_a_successful_close_shows_no_failure() -> None:
+    stub = Finishing(silent=False)
+
+    app.RecorderApp._finish_stop(
+        stub, "saved (merged)", then_exit=True, outcome=Outcome(ok=True, status="saved (merged)")
+    )
+
+    assert stub.order == ["geplant"]
+
+
+# --- The start that nobody foresaw --------------------------------------------
+
+
+def test_an_unexpected_start_failure_is_reported_instead_of_silent(monkeypatch) -> None:
+    """Under `pythonw` there is no console, so this is the last channel left."""
+    shown: list[bool] = []
+
+    def boom() -> int:
+        raise RuntimeError("kaputt")
+
+    monkeypatch.setattr(app, "bootstrap", lambda: None)
+    monkeypatch.setattr(app, "_open_window", boom)
+    monkeypatch.setattr(app, "_report_unexpected", lambda: shown.append(True))
+
+    assert app.main() == app.EXIT_UNEXPECTED
+    assert shown == [True]

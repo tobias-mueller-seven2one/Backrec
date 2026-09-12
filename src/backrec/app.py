@@ -237,6 +237,18 @@ class RecorderApp(ctk.CTk):
         self._lock_window_size()
         self._poll_ui_loop()
 
+    def report_callback_exception(self, exc_type, exc_value, traceback_object) -> None:
+        """Tk hands an exception in a callback to stderr - which is None here.
+
+        Without this override the process keeps a window that no longer reacts,
+        and the reason for it exists nowhere: under `pythonw` stderr is None,
+        so Tk's own report writes into nothing.
+        """
+        log.error(
+            "Unerwarteter Fehler im Fenster",
+            exc_info=(exc_type, exc_value, traceback_object),
+        )
+
     # --- The gear menu ------------------------------------------------------
 
     def _install_tooltip(self, widget, text: str) -> None:
@@ -539,6 +551,7 @@ class RecorderApp(ctk.CTk):
         threading.Thread(target=self._do_stop, daemon=True).start()
 
     def _do_stop(self, then_exit: bool = False):
+        outcome: Outcome | None = None
         try:
             if self.mic_recorder is not None:
                 self.mic_recorder.stop(timeout=5)
@@ -552,7 +565,8 @@ class RecorderApp(ctk.CTk):
 
             self._recording = False
             instance.clear_recording()
-            message = self._merge_and_save()
+            outcome = self._merge_and_save()
+            message = outcome.status
 
         except Exception:
             message = "stop error"
@@ -560,28 +574,17 @@ class RecorderApp(ctk.CTk):
             instance.clear_recording()
             log.error("Unerwarteter Fehler in _do_stop()", exc_info=True)
 
-        self.after(0, lambda: self._finish_stop(message, then_exit=then_exit))
+        self.after(0, lambda: self._finish_stop(message, then_exit=then_exit, outcome=outcome))
 
-    def _merge_and_save(self) -> str:
-        """Hands the recording over and shows a failure where it can be seen."""
-        outcome = finish_recording(
+    def _merge_and_save(self) -> Outcome:
+        """Hands the recording over. What is shown is decided in `_finish_stop`."""
+        return finish_recording(
             self._mic_filepath,
             self._system_filepath,
             self._timestamp or datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
             self.recording_dir,
             self.target_dir,
         )
-
-        if not outcome.ok and not self._silent_failures:
-            # The status line is 280 px wide and carries neither the cause nor a
-            # folder. Without this dialog the failure would exist only in a log
-            # nobody opens - and the takes that could still be rescued would go
-            # unnoticed. Suppressed for a stop from outside: nobody is sitting
-            # in front of the window then, and a modal dialog would hold the
-            # process until its deadline runs out.
-            self.after(0, lambda: self._report_failure(outcome))
-
-        return outcome.status
 
     def _report_failure(self, outcome: Outcome) -> None:
         from tkinter import messagebox
@@ -594,11 +597,27 @@ class RecorderApp(ctk.CTk):
             parent=self,
         )
 
-    def _finish_stop(self, message: str, then_exit: bool = False):
+    def _finish_stop(
+        self,
+        message: str,
+        then_exit: bool = False,
+        outcome: Outcome | None = None,
+    ):
         self._busy = False
         self._refresh_status()
         self.status_label.configure(text=message, text_color=TEXT_MUTED)
         log.info(f"Status final: {message}")
+
+        # Shown here and not from the working thread, and shown *before* the
+        # window may go: the status line is 280 px wide and carries neither the
+        # cause nor a folder, so this dialog is the only place that names where
+        # the takes stayed. Scheduled the other way round it would be torn down
+        # by `_finalize_exit` a second later - unread, on exactly the route
+        # where a recording is at stake. Suppressed for a stop from outside:
+        # nobody is in front of the window then, and a modal dialog would hold
+        # the process until its deadline runs out.
+        if outcome is not None and not outcome.ok and not self._silent_failures:
+            self._report_failure(outcome)
 
         if then_exit:
             self.after(EXIT_DELAY_MS, self._finalize_exit)
@@ -706,6 +725,24 @@ class RecorderApp(ctk.CTk):
             self.btn_discard.configure(state="disabled", text_color=TEXT_MUTED, fg_color=BTN_IDLE)
 
     def _poll_ui_loop(self):
+        """The clock of the window. It has to survive its own mistakes.
+
+        Everything the application still notices while it stands open rides in
+        here: the geometry it defends and the stop request from outside. An
+        exception used to end the chain of `after` calls for good - the window
+        stayed on screen, `stop` ran into its deadline and nothing said why.
+        """
+        try:
+            self._poll_ui_once()
+        except Exception:  # noqa: BLE001 - see docstring
+            log.error("Fehler in der Anzeigeschleife", exc_info=True)
+        finally:
+            try:
+                self.after(UI_POLL_MS, self._poll_ui_loop)
+            except tk.TclError:
+                log.debug("Anzeigeschleife endet mit dem Fenster")
+
+    def _poll_ui_once(self):
         self._enforce_window_size()
 
         # The loop that already defends the window geometry is the only clock
@@ -748,11 +785,10 @@ class RecorderApp(ctk.CTk):
             self.sys_level_dot.configure(text_color=DOT_ON if active else DOT_OFF)
             self.sys_level_label.configure(text=name, text_color=TEXT if active else TEXT_MUTED)
 
-        self.after(UI_POLL_MS, self._poll_ui_loop)
-
 
 EXIT_ALREADY_RUNNING = 3
 EXIT_PREFLIGHT_FAILED = 2
+EXIT_UNEXPECTED = 4
 
 
 def _report_already_running(pid: int) -> None:
@@ -779,6 +815,50 @@ def _report_already_running(pid: int) -> None:
         log.warning("Hinweis auf die laufende Anwendung liess sich nicht anzeigen", exc_info=True)
 
 
+def _report_unexpected() -> None:
+    """The last visible channel a windowless start has left.
+
+    Everything below the preflight has a message of its own; this one catches
+    what nobody foresaw - a broken installation, a display that refuses, a
+    dependency that is not there. Without it such a start ends the way this whole
+    change set out to abolish: no window, no message, nothing on screen.
+
+    The cause is deliberately not in the text. Whatever ends up here is a
+    technical sentence in English, and the reader's next move does not depend on
+    it; it stands in full, with its whole trace, in the log the message names.
+    """
+    try:
+        import tkinter
+        from tkinter import messagebox
+
+        root = tkinter.Tk()
+        root.withdraw()
+        messagebox.showerror(
+            f"{paths.TOOL_NAME} kann nicht starten",
+            "Was ist passiert:\nBeim Starten ist etwas schiefgegangen, "
+            "das nicht vorgesehen war.\n\n"
+            "Was tun:\nSetup.cmd im Ordner von Backrec doppelklicken. "
+            f"Bleibt es dabei, die Aufzeichnung unter {paths.logs_dir()} an Tobias schicken.",
+        )
+        root.destroy()
+    except Exception:  # noqa: BLE001 - the log entry is the part that matters
+        log.error("Hinweis auf den unerwarteten Fehler liess sich nicht anzeigen", exc_info=True)
+
+
+def _thread_failed(args) -> None:
+    """An uncaught exception in a worker thread, into the log instead of nowhere.
+
+    The default hook writes to stderr, and under `pythonw` there is none. A
+    recording thread that ends this way would otherwise simply stop delivering
+    audio, with no trace of the reason.
+    """
+    log.error(
+        "Unerwarteter Fehler im Hintergrund (%s)",
+        getattr(args.thread, "name", "unbekannt"),
+        exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
+    )
+
+
 def main() -> int:
     """The checked way into the window (design D5, D6).
 
@@ -787,7 +867,17 @@ def main() -> int:
     silently under `pythonw`.
     """
     bootstrap()
+    threading.excepthook = _thread_failed
 
+    try:
+        return _open_window()
+    except Exception:  # noqa: BLE001 - see `_report_unexpected`
+        log.critical("Start durch einen unerwarteten Fehler abgebrochen", exc_info=True)
+        _report_unexpected()
+        return EXIT_UNEXPECTED
+
+
+def _open_window() -> int:
     running = instance.running_instance()
     if running is not None:
         if not instance.raise_window(running.pid):
