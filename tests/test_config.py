@@ -146,11 +146,17 @@ def test_the_template_carries_every_known_key():
 
 
 def test_the_template_names_no_installation():
+    """Checked through the release build's own patterns, not a second list.
+
+    Spelling the company name out here would make this file a hit against
+    itself and abort the very build the check exists for.
+    """
+    from backrec import release
+
     text = paths.example_config_path(REPO).read_text(encoding="utf-8")
 
-    assert "Users\\" not in text
+    assert release.user_path_hits(text) == []
     assert paths.CLOUD_VARIABLE not in text
-    assert "seven2one" not in text.lower()
 
 
 def test_an_unknown_key_is_reported_and_never_removed(tmp_path, config_values):
