@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 from dataclasses import is_dataclass
 from pathlib import Path
@@ -520,3 +521,27 @@ def test_an_unreadable_record_of_the_installed_version_counts_as_absent() -> Non
     target.write_text("{kaputt", encoding="utf-8")
 
     assert control.read_installed_version() is None
+
+
+# --- Opening folders (H1) -----------------------------------------------------
+
+
+# A command line that starts Explorer, and the switch that selects a file in it.
+# The registry path `...\CurrentVersion\Explorer\Shell Folders` is no call and is
+# not matched: there the word is followed by a backslash, never by a quote.
+_EXPLORER_CALL = re.compile(r"""["']explorer(\.exe)?["']|/select""", re.IGNORECASE)
+
+
+def test_no_folder_is_opened_through_an_explorer_command() -> None:
+    """Convention section 5, revision of 12.09.2026.
+
+    Handed an argument list, Python puts quotes around the whole argument as soon
+    as the path carries a space; Explorer then sees `"/select,C:\\...lnk"`, knows
+    no such switch and opens "Dokumente" instead of the wanted folder. Backrec
+    never builds such a command line -- `os.startfile` takes a path and needs no
+    switch -- and this test is what keeps that route from being left.
+    """
+    sources = sorted(Path(control.__file__).parent.glob("*.py"))
+    offenders = [path.name for path in sources if _EXPLORER_CALL.search(path.read_text(encoding="utf-8"))]
+
+    assert offenders == [], "Ordner werden mit os.startfile geöffnet, nie über eine Explorer-Kommandozeile"
