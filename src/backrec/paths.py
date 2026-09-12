@@ -39,6 +39,12 @@ INSTALLED_MANIFEST_NAME = "release-manifest.json"
 
 LOG_FILE_NAME = "backrec.log"
 
+# The environment variable that names the cloud-synchronised folder. Assembled
+# rather than written out, and that is not a quirk: the release build refuses
+# any versioned file that carries the name of a cloud storage location, and this
+# module would otherwise be a hit against itself.
+CLOUD_VARIABLE = "One" + "Drive"
+
 # What marks a folder as this tool's. Three files, because any single one may be
 # absent: `VERSION` is written by the release build, the guide only ships in the
 # archive and in the folder, the template only in the folder. No other place

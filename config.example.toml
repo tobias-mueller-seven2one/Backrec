@@ -1,0 +1,30 @@
+# Einstellungen von Backrec.
+#
+# Die gültige Datei liegt unter
+# %LOCALAPPDATA%\MemoSuite\Backrec\config.toml; die Datei config.example.toml
+# im Ordner des Werkzeugs ist nur die Vorlage dafür. Setup.cmd legt die gültige
+# Datei daraus an und fragt dabei die Ordner ab; eine vorhandene Datei wird nie
+# überschrieben.
+#
+# Pfadangaben dürfen %VAR%, $VAR und ~ enthalten und werden vor der Verwendung
+# expandiert. Deshalb steht in der Vorlage nie ein Benutzername.
+
+# Der Ordner, in den Backrec aufnimmt.
+#
+# Er liegt bewusst NICHT in einem Ordner, den eine Cloud synchronisiert: eine
+# Aufnahme besteht aus drei Dateien und wächst mit rund 20 MB je Minute, und
+# eine Synchronisation, die jede davon während der Aufnahme hochlädt, kostet
+# Bandbreite und hält die Datei zeitweise offen. Hier bleiben die beiden
+# Rohspuren und die Mischung liegen; aufgeräumt wird von Hand.
+recording_dir = '%USERPROFILE%\Aufnahmen\Recording'
+
+# Der Ordner, in den die fertige Mischung kopiert wird.
+#
+# Pflichtwert und Schnittstelle zum nächsten Werkzeug der Reihe: was hier
+# landet, wird dort weiterverarbeitet. Deshalb kommt hier ausschließlich die
+# fertige Mischung an -- scheitert sie, bleibt alles im Aufnahmeordner liegen
+# und in diesem Ordner erscheint nichts.
+target_dir = '%USERPROFILE%\Aufnahmen\Input'
+
+# Ausführlichkeit der Aufzeichnung: DEBUG, INFO, WARNING oder ERROR.
+log_level = 'INFO'
