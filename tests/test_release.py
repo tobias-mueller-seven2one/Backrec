@@ -38,6 +38,7 @@ def make_repo(tmp_path: Path, *, version: str = "2026.09.1") -> Path:
     (root / ".venv" / "Scripts" / "pythonw.exe").write_bytes(b"MZ")
     (root / "logs" / "backrec.log").write_text("alt\n", encoding="utf-8")
     (root / "openspec" / "changes" / "irgendwas" / "tasks.md").write_text("- [ ]\n", encoding="utf-8")
+    (root / "openspec" / "config.yaml").write_text("schema: x\n", encoding="utf-8")
 
     (root / paths.GUIDE_FILE_NAME).write_bytes(GUIDE.read_bytes())
     return root
@@ -83,12 +84,17 @@ def test_nothing_local_ever_reaches_the_archive(tmp_path: Path, unwanted: str) -
 
 
 def test_the_planning_artefacts_stay_out(tmp_path: Path) -> None:
+    """The whole folder, not only the proposals in it.
+
+    Section 12 of the convention keeps planning off a colleague's machine, and
+    a folder that arrives half empty is a question waiting to be asked.
+    """
     root = make_repo(tmp_path)
 
     result = build(root, tmp_path / "out")
 
     with zipfile.ZipFile(result.archive) as bundle:
-        assert not [name for name in bundle.namelist() if "openspec/changes" in name]
+        assert not [name for name in bundle.namelist() if "openspec/" in name]
 
 
 def test_the_guide_sits_at_the_top_level_and_is_listed_with_its_checksum(tmp_path: Path) -> None:

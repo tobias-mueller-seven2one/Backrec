@@ -65,8 +65,11 @@ EXCLUDED_DIRS: tuple[str, ...] = (
 )
 
 # Path prefixes, checked as whole path segments. The planning artefacts are
-# versioned and are of no use to anybody who only unpacks the archive.
-EXCLUDED_PREFIXES: tuple[str, ...] = ("openspec/changes",)
+# versioned and are of no use to anybody who only unpacks the archive - the
+# whole folder, not only the proposals in it, because section 12 of the suite
+# convention keeps planning off a colleague's machine entirely and a
+# half-excluded folder is a question waiting to be asked.
+EXCLUDED_PREFIXES: tuple[str, ...] = ("openspec",)
 
 EXCLUDED_PATTERNS: tuple[str, ...] = (
     "*.pyc",

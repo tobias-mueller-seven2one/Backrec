@@ -36,6 +36,11 @@ COMMANDS = (
 # exactly the line that walks around it. `Check` and `Problem` are on it because
 # their sentences reach the same console through `render_text` and the error
 # dialog, only one indirection later.
+#
+# The four dialog calls are on it for the same reason and are the ones a
+# colleague is most likely to meet: everything the gear menu says goes through
+# them, and Backrec has no other surface - it is the one tool of the suite whose
+# messages reach the reader through a window rather than through a console.
 OUTPUT_CALLS = (
     "ok",
     "warn",
@@ -48,6 +53,10 @@ OUTPUT_CALLS = (
     "print",
     "Check",
     "Problem",
+    "showinfo",
+    "showwarning",
+    "showerror",
+    "askyesno",
 )
 
 # Not vocabulary but shape: a stack trace has no business in any of these lines,

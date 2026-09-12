@@ -133,8 +133,8 @@ possible moment for that news.
 
 `backrec release` builds `Backrec-<version>.zip` into
 `%LOCALAPPDATA%\MemoSuite\releases\`. The file selection is an allow list over
-`git ls-files`; `.venv`, `logs`, `.env`, `config.toml`, `*.lnk` and
-`openspec/changes/` never get in. Five checks abort the build hard: the working
+`git ls-files`; `.venv`, `logs`, `.env`, `config.toml`, `*.lnk` and `openspec/`
+never get in. Five checks abort the build hard: the working
 tree must be committed, the lock file must match `pyproject.toml`, no packed file
 may contain a user path or something that looks like an access key, and
 `LIES-MICH-ZUERST.txt` must obey all of its rules (encoding, line count, line
