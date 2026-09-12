@@ -296,6 +296,43 @@ def test_a_foreign_file_name_in_the_guide_aborts(tmp_path: Path) -> None:
         build(root, tmp_path / "out")
 
 
+def test_an_uncommitted_change_aborts_the_build(tmp_path: Path, monkeypatch) -> None:
+    root = make_repo(tmp_path)
+    (root / ".git").mkdir()
+
+    def dirty(command, **_kwargs):
+        import subprocess
+
+        return subprocess.CompletedProcess(
+            args=command, returncode=0, stdout=" M README.md\n?? notiz.txt\n", stderr=""
+        )
+
+    monkeypatch.setattr(release.subprocess, "run", dirty)
+
+    with pytest.raises(release.ReleaseError, match="README.md"):
+        release.check_worktree(root)
+
+
+def test_an_untracked_file_alone_is_no_reason_to_abort(tmp_path: Path, monkeypatch) -> None:
+    root = make_repo(tmp_path)
+    (root / ".git").mkdir()
+
+    def only_untracked(command, **_kwargs):
+        import subprocess
+
+        return subprocess.CompletedProcess(
+            args=command, returncode=0, stdout="?? notiz.txt\n", stderr=""
+        )
+
+    monkeypatch.setattr(release.subprocess, "run", only_untracked)
+
+    release.check_worktree(root)
+
+
+def test_without_version_control_the_state_of_the_folder_is_not_checked(tmp_path: Path) -> None:
+    release.check_worktree(make_repo(tmp_path))
+
+
 def test_no_archive_is_left_behind_when_a_guide_rule_fails(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
     output = tmp_path / "out"

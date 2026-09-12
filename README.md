@@ -134,11 +134,12 @@ possible moment for that news.
 `backrec release` builds `Backrec-<version>.zip` into
 `%LOCALAPPDATA%\MemoSuite\releases\`. The file selection is an allow list over
 `git ls-files`; `.venv`, `logs`, `.env`, `config.toml`, `*.lnk` and
-`openspec/changes/` never get in. Four checks abort the build hard: the lock file
-must match `pyproject.toml`, no packed file may contain a user path or something
-that looks like an access key, and `LIES-MICH-ZUERST.txt` must obey all of its
-rules (encoding, line count, line length, vocabulary, the eight sections in
-order).
+`openspec/changes/` never get in. Five checks abort the build hard: the working
+tree must be committed, the lock file must match `pyproject.toml`, no packed file
+may contain a user path or something that looks like an access key, and
+`LIES-MICH-ZUERST.txt` must obey all of its rules (encoding, line count, line
+length, vocabulary, the eight sections in order). There is no escape hatch — an
+archive that reaches a chat channel cannot be recalled.
 
 The archive carries `Backrec\` as its single top level plus a
 `release-manifest.json` listing every file with its SHA-256.

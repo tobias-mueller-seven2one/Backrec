@@ -243,6 +243,41 @@ def collect_files(root: Path) -> list[Path]:
 # --- Checks -------------------------------------------------------------------
 
 
+def check_worktree(root: Path) -> None:
+    """Nothing uncommitted may travel (design D18).
+
+    The file selection runs over the versioned paths, but it reads them from
+    disk - an edit that is not committed anywhere would ship inside the archive
+    and exist on no branch. Skipped without version control, because an archive
+    built from an unpacked archive has nothing to compare against.
+    """
+    if not (root / ".git").exists():
+        return
+
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=str(root),
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=LIST_FILES_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise ReleaseError(f"Der Stand des Ordners liess sich nicht pruefen: {exc}") from exc
+
+    changed = [
+        line[3:]
+        for line in result.stdout.splitlines()
+        if line.strip() and not line.startswith("??")
+    ]
+    if changed:
+        raise ReleaseError(
+            "Es gibt Aenderungen, die noch nirgends festgehalten sind: "
+            f"{', '.join(sorted(changed)[:5])}. Erst festhalten, dann bauen."
+        )
+
+
 def check_lockfile(root: Path) -> None:
     """The locked list has to match the project definition."""
     try:
@@ -486,6 +521,7 @@ def build(
         raise ReleaseError(f"Die Fassung '{version}' hat nicht die Form JJJJ.MM.N")
 
     if not skip_lock_check:
+        check_worktree(source)
         check_lockfile(source)
 
     check_guide(paths.guide_path(source))
