@@ -299,7 +299,7 @@ def _config_checks(facts: Observations) -> list[Check]:
                 "Neue Angaben in der Vorlage",
                 Level.WARN,
                 f"in der Vorlage neu, hier nicht vorhanden: {', '.join(facts.missing_keys)}",
-                "Die Angabe von Hand ergänzen; ergänzt wird hier nichts.",
+                "Setup.cmd doppelklicken ergänzt sie.",
             )
         )
 

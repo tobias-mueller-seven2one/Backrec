@@ -408,10 +408,28 @@ def _ensure_environment(assistant: Assistant, repo: Path) -> bool:
     return True
 
 
+def _complete_settings(assistant: Assistant, config_path: Path, repo: Path) -> None:
+    """Add settings that are new in the template to an existing file.
+
+    Never a reason to abort: the tool runs on its code defaults for every key it
+    does not find, so a file that could not be extended is a worse file, not a
+    broken one.
+    """
+    try:
+        added = wizard.complete_from_template(config_path, repo=repo)
+    except (OSError, config_module.ConfigError) as exc:
+        logger.warning("Einstellungen nicht ergaenzbar: %s", exc)
+        return
+
+    if added:
+        assistant.note(wizard.completion_message(len(added)))
+
+
 def _settle_settings(assistant: Assistant, unattended: bool, config_path: Path, repo: Path) -> bool:
     """Existing settings, a migrated `.env`, or the wizard - in that order."""
     if config_path.is_file():
         assistant.ok(f"Die Einstellungen gibt es schon ({config_path}) -- unverändert übernommen")
+        _complete_settings(assistant, config_path, repo)
         return True
 
     migration = config_module.migrate_legacy(target=config_path, repo=repo)
@@ -421,6 +439,7 @@ def _settle_settings(assistant: Assistant, unattended: bool, config_path: Path, 
         )
         assistant.note(f"Übernommen wurden: {', '.join(migration.keys)}.")
         assistant.note(f"Die alte Datei {migration.source} bleibt liegen, wirkt aber nicht mehr.")
+        _complete_settings(assistant, config_path, repo)
         return True
 
     if migration.missing:

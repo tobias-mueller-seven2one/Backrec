@@ -171,7 +171,15 @@ def test_a_key_new_in_the_template_is_a_warning_and_is_not_added() -> None:
     check = find(doctor.evaluate(facts(missing_keys=("log_level",))), "config.template")
 
     assert check.level is doctor.Level.WARN
-    assert "ergänzt wird hier nichts" in check.next_step
+    assert "log_level" in check.cause
+
+
+def test_a_key_new_in_the_template_is_no_handwork() -> None:
+    """The setup adds it; the diagnosis says so instead of handing over work."""
+    check = find(doctor.evaluate(facts(missing_keys=("log_level",))), "config.template")
+
+    assert check.next_step == "Setup.cmd doppelklicken ergänzt sie."
+    assert "von Hand" not in check.next_step
 
 
 def test_the_layer_a_value_came_from_is_named() -> None:

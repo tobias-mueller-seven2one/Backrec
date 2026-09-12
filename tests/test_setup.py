@@ -291,6 +291,39 @@ def test_a_second_run_names_the_steps_it_skipped(calm, tmp_path, monkeypatch) ->
     assert "liegt schon auf dem Desktop" in printed
 
 
+# --- New settings from the template (H2) --------------------------------------
+
+
+def test_the_setup_adds_a_setting_the_template_gained(calm, tmp_path, monkeypatch) -> None:
+    """A colleague never adds a setting by hand (convention section 4)."""
+    desktop = Desktop(tmp_path / "Desktop")
+    run_setup(calm, desktop, monkeypatch, unattended=True)
+    settings = paths.config_path()
+    settings.write_text(
+        "\n".join(
+            line
+            for line in settings.read_text(encoding="utf-8").splitlines()
+            if not line.startswith("log_level")
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    _result, printed = run_setup(calm, desktop, monkeypatch, unattended=True)
+
+    assert "1 neue Einstellung mit Standardwert ergänzt." in printed
+    assert "log_level = 'INFO'" in settings.read_text(encoding="utf-8")
+
+
+def test_a_run_without_a_gap_reports_no_addition(calm, tmp_path, monkeypatch) -> None:
+    desktop = Desktop(tmp_path / "Desktop")
+    run_setup(calm, desktop, monkeypatch, unattended=True)
+
+    _result, printed = run_setup(calm, desktop, monkeypatch, unattended=True)
+
+    assert "ergänzt" not in printed
+
+
 # --- The desktop icon ---------------------------------------------------------
 
 

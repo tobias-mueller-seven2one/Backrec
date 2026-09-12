@@ -15,6 +15,13 @@ Written from `config.example.toml` by text substitution rather than through a
 TOML writer. That keeps the template the single source of the comments - a
 generated file would have none - and saves a dependency that would be needed
 for the setup only.
+
+Settings that are new in the template are added to an existing file by
+`complete_from_template`, with the template's value and the template's comment.
+A colleague never adds a setting by hand: the diagnosis used to report the drift
+and leave the handwork to them, which is precisely what it must not do
+(convention section 4, revision of 12.09.2026). Existing entries are never
+touched.
 """
 
 from __future__ import annotations
@@ -24,9 +31,10 @@ import re
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from . import paths
+from .config import missing_keys, read_toml
 from .console import Assistant
 from .logging_setup import get_logger
 
@@ -35,6 +43,14 @@ logger = get_logger(__name__)
 TARGET_FOLDER_NAME = "Input"
 RECORDING_FOLDER_NAME = "Recording"
 DATA_ROOT_FOLDER_NAME = "Aufnahmen"
+
+# A key at the start of a line, used to attach a comment block to the key below
+# it while the template is parsed.
+_KEY_LINE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*=")
+
+# A table header. Everything after it belongs to that table, which is why a new
+# top-level key may never simply be appended behind one.
+_TABLE_LINE = re.compile(r"^\s*\[")
 
 
 @dataclass(frozen=True)
@@ -107,6 +123,102 @@ def render(template: str, values: Mapping[str, Any]) -> str:
 
 def template_text(template_path: Path | None = None, repo: Path | None = None) -> str:
     return (template_path or paths.example_config_path(repo)).read_text(encoding="utf-8")
+
+
+def template_values(template_path: Path | None = None, repo: Path | None = None) -> dict[str, Any]:
+    """The values the template carries, in the template's order."""
+    return read_toml(template_path or paths.example_config_path(repo))
+
+
+def template_comments(template_path: Path | None = None, repo: Path | None = None) -> dict[str, str]:
+    """The comment block belonging to each key of the template.
+
+    Parsed instead of duplicated: the template is the one place a setting is
+    explained, and a setting written into the local file has to carry the same
+    explanation or nobody can read it there. A blank line ends a block, which is
+    what keeps the file header from being attributed to the first key.
+    """
+    comments: dict[str, str] = {}
+    block: list[str] = []
+
+    for line in template_text(template_path, repo).splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            block.append(stripped.lstrip("#").strip())
+            continue
+        if not stripped:
+            block.clear()
+            continue
+        match = _KEY_LINE.match(stripped)
+        if match and block:
+            comments[match.group(1)] = "\n".join(block)
+        block.clear()
+
+    return comments
+
+
+def render_additions(
+    keys: Sequence[str],
+    values: Mapping[str, Any],
+    comments: Mapping[str, str],
+) -> str:
+    """The text block for settings that are new in the template. Pure."""
+    blocks: list[str] = []
+    for key in keys:
+        lines = [f"# {line}" if line else "#" for line in comments.get(key, "").splitlines()]
+        lines.append(f"{key} = {format_value(values[key])}")
+        blocks.append("\n".join(lines))
+    return "\n\n".join(blocks) + "\n"
+
+
+def insert_position(lines: Sequence[str]) -> int:
+    """Where a new top-level key may go: before the first table header.
+
+    Appended behind `[abschnitt]` a key would silently become part of that
+    section, and the tool would never see it again under its own name. Backrec's
+    template is flat today; the rule costs eight lines and prevents a fault
+    nobody would notice.
+    """
+    for index, line in enumerate(lines):
+        if _TABLE_LINE.match(line):
+            return index
+    return len(lines)
+
+
+def complete_from_template(
+    config_file: Path,
+    template_path: Path | None = None,
+    repo: Path | None = None,
+) -> tuple[str, ...]:
+    """Add settings the template has and the local file lacks.
+
+    Value and comment come from the template; an existing entry is never read,
+    never moved and never overwritten. A colleague therefore never adds a
+    setting by hand (convention section 4, revision of 12.09.2026).
+    """
+    if not config_file.is_file():
+        return ()
+
+    template = template_values(template_path, repo)
+    added = missing_keys(read_toml(config_file), template)
+    if not added:
+        return ()
+
+    lines = config_file.read_text(encoding="utf-8").splitlines()
+    position = insert_position(lines)
+    block = render_additions(added, template, template_comments(template_path, repo)).splitlines()
+
+    merged = [*lines[:position], "", *block, *lines[position:]]
+    config_file.write_text("\n".join(merged).rstrip("\n") + "\n", encoding="utf-8")
+    logger.info("Einstellungen ergaenzt: %s", ", ".join(added))
+    return added
+
+
+def completion_message(count: int) -> str:
+    """The one line the setup reports about added settings."""
+    if count == 1:
+        return "1 neue Einstellung mit Standardwert ergänzt."
+    return f"{count} neue Einstellungen mit Standardwerten ergänzt."
 
 
 def write_config(

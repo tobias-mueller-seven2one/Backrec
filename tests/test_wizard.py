@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import tomllib
 from pathlib import Path
 
 from backrec import config as config_module, paths, wizard
@@ -195,3 +196,129 @@ def test_an_unreadable_handshake_is_simply_no_suggestion(tmp_path):
     handshake.write_text("kein = = gueltiges", encoding="utf-8")
 
     assert wizard.read_handshake(handshake) is None
+
+
+# --- New settings from the template (H2) --------------------------------------
+
+
+TEMPLATE = """# Kopfzeile der Vorlage.
+
+# Der Ordner, in den aufgenommen wird.
+recording_dir = 'X'
+
+# Der Ordner, in den kopiert wird.
+target_dir = 'Y'
+
+# Ausführlichkeit der Aufzeichnung,
+# eine von vier Stufen.
+log_level = 'INFO'
+"""
+
+
+def template_file(tmp_path: Path) -> Path:
+    path = tmp_path / paths.EXAMPLE_CONFIG_FILE_NAME
+    path.write_text(TEMPLATE, encoding="utf-8")
+    return path
+
+
+def test_the_setup_adds_a_setting_that_is_new_in_the_template(tmp_path):
+    template = template_file(tmp_path)
+    config = tmp_path / "config.toml"
+    config.write_text("recording_dir = 'A'\ntarget_dir = 'B'\n", encoding="utf-8")
+
+    added = wizard.complete_from_template(config, template)
+
+    assert added == ("log_level",)
+    assert "log_level = 'INFO'" in config.read_text(encoding="utf-8")
+
+
+def test_the_added_setting_carries_the_comment_of_the_template(tmp_path):
+    template = template_file(tmp_path)
+    config = tmp_path / "config.toml"
+    config.write_text("recording_dir = 'A'\ntarget_dir = 'B'\n", encoding="utf-8")
+
+    wizard.complete_from_template(config, template)
+
+    text = config.read_text(encoding="utf-8")
+    assert "# Ausführlichkeit der Aufzeichnung," in text
+    assert "# eine von vier Stufen." in text
+    assert "# Kopfzeile der Vorlage." not in text, "die Kopfzeile gehört keinem Schlüssel"
+
+
+def test_an_existing_value_is_never_overwritten(tmp_path):
+    template = template_file(tmp_path)
+    config = tmp_path / "config.toml"
+    config.write_text("recording_dir = 'mein-ordner'\ntarget_dir = 'B'\n", encoding="utf-8")
+
+    wizard.complete_from_template(config, template)
+
+    with config.open("rb") as handle:
+        values = tomllib.load(handle)
+    assert values["recording_dir"] == "mein-ordner"
+    assert values["target_dir"] == "B"
+
+
+def test_adding_twice_changes_nothing_the_second_time(tmp_path):
+    template = template_file(tmp_path)
+    config = tmp_path / "config.toml"
+    config.write_text("recording_dir = 'A'\ntarget_dir = 'B'\n", encoding="utf-8")
+
+    first = wizard.complete_from_template(config, template)
+    after_first = config.read_text(encoding="utf-8")
+    second = wizard.complete_from_template(config, template)
+
+    assert first
+    assert second == ()
+    assert config.read_text(encoding="utf-8") == after_first
+
+
+def test_the_extended_file_stays_readable(tmp_path):
+    """Read back with the real loader, not just eyeballed."""
+    template = template_file(tmp_path)
+    config = tmp_path / "config.toml"
+    config.write_text(r"recording_dir = 'C:\Aufnahmen\Recording'" + "\n", encoding="utf-8")
+
+    wizard.complete_from_template(config, template)
+
+    with config.open("rb") as handle:
+        values = tomllib.load(handle)
+    assert values["recording_dir"] == r"C:\Aufnahmen\Recording"
+    assert values["target_dir"] == "Y"
+    assert values["log_level"] == "INFO"
+
+
+def test_a_new_key_lands_before_the_first_section(tmp_path):
+    """Appended behind a section header the key would belong to that section."""
+    template = template_file(tmp_path)
+    config = tmp_path / "config.toml"
+    config.write_text(
+        "recording_dir = 'A'\ntarget_dir = 'B'\n\n[eigenes]\nnotiz = 'x'\n", encoding="utf-8"
+    )
+
+    wizard.complete_from_template(config, template)
+
+    with config.open("rb") as handle:
+        values = tomllib.load(handle)
+    assert values["log_level"] == "INFO"
+    assert values["eigenes"] == {"notiz": "x"}
+
+
+def test_a_missing_settings_file_is_left_alone(tmp_path):
+    template = template_file(tmp_path)
+    config = tmp_path / "config.toml"
+
+    assert wizard.complete_from_template(config, template) == ()
+    assert not config.exists()
+
+
+def test_the_real_template_needs_no_completion_of_a_file_the_wizard_wrote(tmp_path, config_values):
+    """A freshly written file carries every key the template has."""
+    target = tmp_path / "config.toml"
+    wizard.write_config(target, config_values, repo=REPO)
+
+    assert wizard.complete_from_template(target, repo=REPO) == ()
+
+
+def test_the_message_names_how_many_settings_were_added():
+    assert wizard.completion_message(1) == "1 neue Einstellung mit Standardwert ergänzt."
+    assert wizard.completion_message(3) == "3 neue Einstellungen mit Standardwerten ergänzt."
