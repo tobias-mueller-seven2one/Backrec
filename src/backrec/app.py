@@ -21,10 +21,9 @@ from pathlib import Path
 import customtkinter as ctk
 
 from . import instance, paths, preflight
-from .delivery import unique_destination
+from .delivery import Outcome, discard as discard_takes, finish as finish_recording
 from .devices import PYCAW_AVAILABLE, get_default_comm_device_name, get_default_speaker_device_name
 from .logging_setup import bootstrap, get_logger
-from .merge import merge_audio_files
 from .recording import DEVICE_POLL_SEC, MicRecorder, SystemRecorder
 
 if PYCAW_AVAILABLE:
@@ -337,77 +336,34 @@ class RecorderApp(ctk.CTk):
         self.after(0, lambda: self._finish_stop(message))
 
     def _merge_and_save(self) -> str:
-        """Merge mic+system via FFmpeg, fallback to raw copy if merge fails."""
-        mic_src = self._mic_filepath
-        sys_src = self._system_filepath
+        """Hands the recording over and shows a failure where it can be seen."""
+        outcome = finish_recording(
+            self._mic_filepath,
+            self._system_filepath,
+            self._timestamp or datetime.now().strftime("%Y-%m-%d_%H-%M-%S"),
+            self.recording_dir,
+            self.target_dir,
+        )
 
-        if not (mic_src and mic_src.exists() and mic_src.stat().st_size >= 1024):
-            log.error(f"[MERGE] Mic-Datei fehlt oder zu klein: {mic_src}")
-            return self._fallback_copy_raw()
-        if not (sys_src and sys_src.exists() and sys_src.stat().st_size >= 1024):
-            log.error(f"[MERGE] System-Datei fehlt oder zu klein: {sys_src}")
-            return self._fallback_copy_raw()
+        if not outcome.ok:
+            # The status line is 280 px wide and carries neither the cause nor a
+            # folder. Without this dialog the failure would exist only in a log
+            # nobody opens - and the takes that could still be rescued would go
+            # unnoticed.
+            self.after(0, lambda: self._report_failure(outcome))
 
-        merged_path = self.recording_dir / f"{self._timestamp}.wav"
-        ok, stderr = merge_audio_files(mic_src, sys_src, merged_path)
+        return outcome.status
 
-        if not ok:
-            log.error(f"[MERGE] Merge fehlgeschlagen, weiche auf Rohdateien aus: {stderr}")
-            return self._fallback_copy_raw()
+    def _report_failure(self, outcome: Outcome) -> None:
+        from tkinter import messagebox
 
-        if not (merged_path.exists() and merged_path.stat().st_size >= 1024):
-            log.error(f"[MERGE] Merge-Ausgabedatei fehlt oder zu klein: {merged_path}")
-            return self._fallback_copy_raw()
-
-        import shutil
-
-        dst = unique_destination(self.target_dir / merged_path.name)
-        log.info(f"[MERGE] Kopiere gemischte Datei nach: {dst}")
-        shutil.copy2(str(merged_path), str(dst))
-
-        if dst.exists() and dst.stat().st_size == merged_path.stat().st_size:
-            log.info("[MERGE] Kopie der gemischten Datei verifiziert")
-            return "saved (merged)"
-
-        log.error("[MERGE] Groessenabweichung bei der Kopie der gemischten Datei!")
-        return self._fallback_copy_raw()
-
-    def _fallback_copy_raw(self) -> str:
-        """Fallback if merge failed: copy raw files individually."""
-        mic_result = self._copy_to_target("MIC", self._mic_filepath)
-        sys_result = self._copy_to_target("SYS", self._system_filepath)
-
-        if mic_result == "ok" and sys_result == "ok":
-            return "saved raw (merge failed)"
-        elif mic_result == "ok" or sys_result == "ok":
-            return "partial save"
-        return "save failed"
-
-    def _copy_to_target(self, prefix: str, src):
-        """Copy recording file to target, verify by size. Original stays in Recording dir."""
-        import shutil
-
-        if not (src and src.exists()):
-            log.error(f"[{prefix}] Quelldatei nicht gefunden: {src}")
-            return "missing"
-
-        original_size = src.stat().st_size
-        log.info(f"[{prefix}] Quelldatei vorhanden: {src} ({original_size} Bytes)")
-
-        if original_size < 1024:
-            log.warning(f"[{prefix}] Datei zu klein ({original_size} Bytes), kein Kopiervorgang")
-            return "too_small"
-
-        dst = unique_destination(self.target_dir / src.name)
-        log.info(f"[{prefix}] Kopiere nach: {dst}")
-        shutil.copy2(str(src), str(dst))
-
-        if dst.exists() and dst.stat().st_size == original_size:
-            log.info(f"[{prefix}] Kopie verifiziert, Groesse identisch ({original_size} Bytes)")
-            return "ok"
-
-        log.error(f"[{prefix}] Groessenabweichung nach Kopie! Original={original_size}, Kopie={dst.stat().st_size if dst.exists() else 'fehlt'}")
-        return "mismatch"
+        messagebox.showwarning(
+            f"{paths.TOOL_NAME}: Aufnahme nicht abgeschlossen",
+            f"Was ist passiert:\n{outcome.cause}\n\n{outcome.whereabouts}\n\n"
+            "Was tun: Die Ursache beheben; danach lässt sich die Aufnahme aus "
+            "diesen beiden Spuren noch zusammenmischen.",
+            parent=self,
+        )
 
     def _finish_stop(self, message: str):
         self._busy = False
@@ -472,16 +428,7 @@ class RecorderApp(ctk.CTk):
 
     def _delete_raw_files(self) -> bool:
         """Remove the raw takes from the recording folder. Nothing is copied to the target."""
-        all_removed = True
-        for prefix, path in (("MIC", self._mic_filepath), ("SYS", self._system_filepath)):
-            if path is None:
-                continue
-            try:
-                path.unlink(missing_ok=True)
-                log.info(f"[{prefix}] Rohdatei verworfen: {path}")
-            except Exception:
-                all_removed = False
-                log.error(f"[{prefix}] Rohdatei konnte nicht geloescht werden: {path}", exc_info=True)
+        all_removed = discard_takes(self._mic_filepath, self._system_filepath)
 
         self._mic_filepath = None
         self._system_filepath = None
