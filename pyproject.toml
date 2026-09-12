@@ -27,14 +27,12 @@ dependencies = [
     "pywin32==312",
 ]
 
+# One entry point, for Setup.cmd and Start.cmd. Deliberately no `gui-scripts`
+# counterpart: the desktop shortcut points at `pythonw.exe -m backrec`, because
+# a generated `.exe` is recreated by every build and a shortcut pointing at it
+# would have to be rebuilt along with it (design D9).
 [project.scripts]
 backrec = "backrec.cli:main"
-
-# GUI subsystem: uv puts an entry point into .venv\Scripts that behaves like
-# pythonw.exe. With it neither a script nor a shortcut carries a path to an
-# interpreter, a module or a configuration file.
-[project.gui-scripts]
-backrec-gui = "backrec.app:main"
 
 [dependency-groups]
 dev = ["pytest==8.4.2"]

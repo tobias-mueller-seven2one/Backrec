@@ -1,31 +1,15 @@
 @echo off
+REM Abgeloest. Diese Datei startet nichts mehr und nennt nur den neuen Weg.
+REM Sie bleibt stehen, weil eine alte Verknuepfung auf dem Desktop sonst nur
+REM "Datei nicht gefunden" sagen wuerde (design D11).
+setlocal
 title Backrec
-
-:: Wechselt in den Ordner, in dem diese .bat Datei liegt
-cd /d "%~dp0"
-
-echo ==========================================
-echo Backrec wird gestartet...
-echo ==========================================
-
-:: 1. Prüfen ob .venv existiert, wenn nicht: erstellen
-if not exist ".venv\Scripts\activate.bat" (
-    echo [Info] Erstelle virtuelle Umgebung ^(.venv^) beim ersten Start...
-    echo [Info] Das kann einen Moment dauern.
-    python -m venv .venv
-)
-
-:: 2. .venv aktivieren
-call .venv\Scripts\activate
-
-:: 3. Sicherstellen, dass die Bibliotheken installiert sind
-echo [Info] Pruefe Abhaengigkeiten...
-pip install -r requirements.txt >nul 2>&1
-
-:: 4. Python UI starten (start "" sorgt dafuer, dass die .bat nicht wartet)
-:: pythonw sorgt dafuer, dass kein schwarzes Python-Fenster offen bleibt
-echo [Info] Starte Recorder...
-start "" pythonw main.pyw
-
-:: 5. CMD-Fenster schließen
-exit
+echo.
+echo Diese Datei wird nicht mehr benutzt.
+echo.
+echo Zum Einrichten:  Setup.cmd in diesem Ordner doppelklicken.
+echo Zum Starten:     Start.cmd in diesem Ordner doppelklicken
+echo                  oder das Symbol Backrec auf dem Desktop anklicken.
+echo.
+pause
+endlocal & exit /b 1
