@@ -94,6 +94,45 @@ def run_setup(repo: Path, desktop: Desktop, monkeypatch, answers=None, **kwargs)
 # --- Procedure ----------------------------------------------------------------
 
 
+def test_both_failed_routes_to_the_helper_are_named_separately(monkeypatch) -> None:
+    """"Neither worked" leaves open what the reader should do next."""
+    import subprocess
+
+    stream = io.StringIO()
+    assistant = Assistant(total_steps=1, stream=stream, interactive=False, color=False)
+    monkeypatch.setattr(control.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(
+        control,
+        "_run",
+        lambda command, **_k: subprocess.CompletedProcess(
+            args=command,
+            returncode=1,
+            stdout="",
+            stderr="unable to connect to host"
+            if command[0] == "winget"
+            else "'irm' is not recognized",
+        ),
+    )
+
+    assert control._ensure_uv(assistant) is False
+
+    printed = stream.getvalue()
+    assert "Internet" in printed
+    assert "Kommando" in printed
+    assert "Setup.cmd erneut" in printed
+
+
+def test_an_existing_helper_is_never_fetched_again(monkeypatch) -> None:
+    stream = io.StringIO()
+    assistant = Assistant(total_steps=1, stream=stream, interactive=False, color=False)
+    calls: list[list[str]] = []
+    monkeypatch.setattr(control.shutil, "which", lambda _name: r"C:\uv\uv.exe")
+    monkeypatch.setattr(control, "_run", lambda command, **_k: calls.append(command))
+
+    assert control._ensure_uv(assistant) is True
+    assert calls == []
+
+
 def test_every_step_produces_a_message(calm, tmp_path, monkeypatch) -> None:
     desktop = Desktop(tmp_path / "Desktop")
 

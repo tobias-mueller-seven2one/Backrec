@@ -33,8 +33,22 @@ COMMANDS = (
 
 # What writes to a colleague. `print` is on the list although the package must
 # not use it at all - a test that only knows the output layer would wave through
-# exactly the line that walks around it.
-OUTPUT_CALLS = ("ok", "warn", "fail", "note", "write", "ask", "ask_yes_no", "header", "print")
+# exactly the line that walks around it. `Check` and `Problem` are on it because
+# their sentences reach the same console through `render_text` and the error
+# dialog, only one indirection later.
+OUTPUT_CALLS = (
+    "ok",
+    "warn",
+    "fail",
+    "note",
+    "write",
+    "ask",
+    "ask_yes_no",
+    "header",
+    "print",
+    "Check",
+    "Problem",
+)
 
 # Not vocabulary but shape: a stack trace has no business in any of these lines,
 # and the whole of it is in the log anyway.
