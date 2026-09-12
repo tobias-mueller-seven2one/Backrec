@@ -181,12 +181,12 @@ Die Statusauskunft MUST melden, ob die Anwendung läuft, und dazu Prozesskennung
 
 ### Requirement: Menü im Anwendungsfenster
 
-Weil die Anwendung kein Symbol im Infobereich betreibt, MUST das Anwendungsfenster selbst die Funktionen tragen, die dort sonst liegen. Das Fenster MUST eine dauerhaft sichtbare Schaltfläche führen, die ein Menü mit diesen Einträgen öffnet: Aktualisieren, Diagnose, Protokolle öffnen und Auskunft über die Installation. Die Schaltfläche MUST NOT die Fensterbreite verändern und MUST NOT die Bedienelemente der Aufnahme verdrängen. Die Auskunft MUST Werkzeugname, Version, Repository-Pfad, Konfigurationspfad, den vollständigen Pfad der Einstiegsanleitung `LIES-MICH-ZUERST.txt` und den Weg zur Deinstallation nennen. Jede Menüauswahl MUST protokolliert werden. Während eine langlaufende Menüaktion arbeitet, MUST das Menü deaktiviert sein und der Vorgang MUST im Fenster sichtbar sein. Während einer laufenden Aufnahme MUST Aktualisieren und Diagnose deaktiviert sein. Die Menüeinträge MUST dieselben Vorgänge auslösen wie die gleichnamigen Kommandos.
+Weil die Anwendung kein Symbol im Infobereich betreibt, MUST das Anwendungsfenster selbst die Funktionen tragen, die dort sonst liegen. Das Fenster MUST eine dauerhaft sichtbare Schaltfläche führen, die ein Menü mit diesen fünf Einträgen in dieser Reihenfolge öffnet: Aktualisieren, Diagnose, Protokolle öffnen, Einstellungen öffnen und Auskunft über die Installation. Die Reihenfolge MUST der suiteweiten Reihenfolge entsprechen, in der das Öffnen der Einstellungen zwischen dem Öffnen der Protokolle und der Auskunft steht. Die Schaltfläche MUST NOT die Fensterbreite verändern und MUST NOT die Bedienelemente der Aufnahme verdrängen. Die Auskunft MUST Werkzeugname, Version, Repository-Pfad, Konfigurationspfad, den vollständigen Pfad der Einstiegsanleitung `LIES-MICH-ZUERST.txt` und den Weg zur Deinstallation nennen. Jede Menüauswahl MUST protokolliert werden. Während eine langlaufende Menüaktion arbeitet, MUST das Menü deaktiviert sein und der Vorgang MUST im Fenster sichtbar sein. Während einer laufenden Aufnahme MUST Aktualisieren, Diagnose und das Öffnen der Einstellungen deaktiviert sein. Die Menüeinträge MUST dieselben Vorgänge auslösen wie die gleichnamigen Kommandos.
 
 #### Scenario: Menü öffnen
 
 - **WHEN** der Benutzer die Schaltfläche im Fenster anklickt
-- **THEN** erscheint ein Menü mit Aktualisieren, Diagnose, Protokolle öffnen und Auskunft
+- **THEN** erscheint ein Menü mit Aktualisieren, Diagnose, Protokolle öffnen, Einstellungen öffnen und Auskunft in dieser Reihenfolge
 - **AND** die Fensterbreite bleibt unverändert
 
 #### Scenario: Auskunft über die Installation
@@ -199,7 +199,7 @@ Weil die Anwendung kein Symbol im Infobereich betreibt, MUST das Anwendungsfenst
 #### Scenario: Menü während einer Aufnahme
 
 - **WHEN** eine Aufnahme läuft und der Benutzer das Menü öffnet
-- **THEN** sind Aktualisieren und Diagnose nicht auswählbar
+- **THEN** sind Aktualisieren, Diagnose und das Öffnen der Einstellungen nicht auswählbar
 - **AND** der Grund ist erkennbar
 
 #### Scenario: Langlaufende Menüaktion
@@ -226,3 +226,25 @@ Es MUST ein Kommando geben, das das Protokollverzeichnis öffnet oder das Protok
 
 - **WHEN** die fortlaufende Anzeige angefordert wird
 - **THEN** erscheinen neue Protokollzeilen, während sie geschrieben werden
+
+### Requirement: Öffnen der Einstellungen aus dem Menü
+
+Das Menü im Anwendungsfenster MUST die Konfigurationsdatei im Standardprogramm für Text öffnen können, damit ein Benutzer ohne Kommandozeile einen Wert auch dann ändern kann, wenn er die Einrichtung nicht noch einmal laufen lassen will. Der Eintrag MUST zwischen dem Öffnen der Protokolle und der Auskunft über die Installation stehen. Die Auswahl MUST protokolliert werden. Das Öffnen MUST NOT den Hauptthread des Fensters blockieren. Nach dem Öffnen MUST ein Hinweis sagen, dass eine Änderung erst nach dem nächsten Start des Werkzeugs gilt. Existiert noch keine Konfiguration, MUST der Hinweis stattdessen auf die Einrichtung verweisen. Ein fehlgeschlagenes Öffnen MUST den Ort der Datei nennen und MUST NOT das Fenster beenden.
+
+#### Scenario: Einstellungen öffnen
+
+- **WHEN** der Benutzer das Öffnen der Einstellungen wählt
+- **THEN** öffnet sich die Konfigurationsdatei im Standardprogramm für Text
+- **AND** ein Hinweis sagt, dass die Änderung nach dem nächsten Start gilt
+- **AND** das Fenster bleibt währenddessen bedienbar
+
+#### Scenario: Es gibt noch keine Einstellungen
+
+- **WHEN** der Benutzer das Öffnen wählt und keine Konfiguration existiert
+- **THEN** nennt der Hinweis die Einrichtung als nächsten Schritt
+
+#### Scenario: Kein Programm für Text vorhanden
+
+- **WHEN** das Öffnen fehlschlägt
+- **THEN** nennt die Meldung den Ort der Konfigurationsdatei
+- **AND** das Fenster bleibt bestehen

@@ -215,6 +215,21 @@ def test_the_closing_words_name_the_start_route_and_the_menu(
     assert "Zahnrad" in printed
 
 
+def test_the_closing_words_name_the_file_and_both_ways_to_change_it(
+    calm, tmp_path, monkeypatch
+) -> None:
+    """The question "and how do I change that folder now" comes right here."""
+    desktop = Desktop(tmp_path / "Desktop")
+    config = tmp_path / "config.toml"
+
+    _result, printed = run_setup(
+        calm, desktop, monkeypatch, unattended=True, config_path=config
+    )
+
+    assert str(config) in printed
+    assert control.SETTINGS_CHANGE_HINT in printed
+
+
 def test_the_unattended_run_asks_nothing_and_starts_nothing(
     calm, tmp_path, monkeypatch
 ) -> None:

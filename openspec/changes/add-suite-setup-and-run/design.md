@@ -497,6 +497,64 @@ Blick. Verworfen: **veraltete Verknüpfungen nur melden statt entfernen** — au
 keine Anmeldepersistenz (D14), das Entfernen blockiert also kein Schutzprogramm, und ein Befund, den
 der Kollege von Hand abarbeiten müsste, ist derselbe Fehler wie H2.
 
+### D24: Einstellungen ändern — im Einrichten und über das Menü (12.09.2026, abends)
+
+H2 (D23) hat die halbe Strecke gemacht: ein **fehlender** Schlüssel wird seitdem vom Einrichten
+ergänzt. Ein **vorhandener** Schlüssel mit einem Wert, der nicht passt, blieb dagegen Handarbeit an
+der Datei — und die Zielgruppe ist dieselbe, die keinen Schlüssel von Hand anlegen sollte. Die
+Konvention (§5 Schritt 3 und §6 Menüpunkt 9, Revision vom 12.09.2026 abends) schließt die Lücke mit
+zwei Wegen, und beide gehören zusammen: einer fragt, der andere zeigt.
+
+**Weg 1, das Einrichten fragt.** Der erste Lauf bleibt kurz — Basisordner und die beiden daraus
+abgeleiteten Verzeichnisse, dann **eine** Frage „Weitere Einstellungen anpassen?" mit Nein als
+Vorgabe. Wer ja sagt, bekommt jeden übrigen Schlüssel der Vorlage einzeln, mit einer Zeile Bedeutung
+und dem Vorgabewert in Klammern. Ein erneuter Lauf dreht die Reihenfolge um: erst die kompakte
+Übersicht der aktuellen Werte, dann die Frage „Einstellungen ändern?". Ohne die Übersicht wäre die
+Frage unbeantwortbar — niemand weiß auswendig, was in einer Datei steht, die er nie geöffnet hat.
+Damit ist „Setup.cmd noch einmal doppelklicken" der offizielle Weg zu jedem Wert.
+
+**Weg 2, das Menü zeigt.** „Einstellungen öffnen" an Position 9 der suiteweiten Reihenfolge — hier
+der vierte von fünf Einträgen des Zahnrad-Menüs, zwischen „Logs öffnen" und „Info" — öffnet die
+Datei im Standardprogramm für Text. Das ist kein zweiter Editor und keine zweite Oberfläche: die
+Datei erklärt sich selbst, weil jeder Kommentar der Vorlage in ihr steht (D23/H2). Der Eintrag läuft
+wie jede lange Menüaktion des Fensters in einem eigenen Thread (D20) und sagt danach, dass eine
+Änderung erst nach dem nächsten Start gilt — sonst ändert jemand einen Ordner und wartet darauf,
+dass etwas passiert. Während einer Aufnahme ist er gesperrt wie „Aktualisieren…" und „Diagnose": ein
+geänderter Aufnahmeordner gilt beim nächsten Start, die laufende Aufnahme schriebe weiter dorthin,
+wo sie begonnen hat.
+
+**Die Typprüfung gehört an die Frage, nicht an den Start.** `wizard.kind_of` leitet die Art eines
+Wertes aus der Vorlage ab (Bool, Zahl, Liste, Pfad), und die einzige Aufzählung, die es hier gibt,
+kommt aus einer einzigen Liste (`wizard.choices_for` über `wizard.LOG_LEVELS`) mit genau den Namen,
+die die Einrichtung des Protokolls versteht. Eine zweite Tabelle
+„dieser Schlüssel ist eine Zahl" würde beim ersten neuen Schlüssel auseinanderlaufen. Nach
+`MAX_ATTEMPTS` unpassenden Antworten bleibt der bisherige Wert stehen: ohne Grenze fragt ein Lauf,
+dessen Antworten nicht von einer Tastatur kommen, ewig.
+
+**Geheimnisse erscheinen nur als „gesetzt".** Dieses Werkzeug hat heute keines. Die Regel steht
+trotzdem im Code, weil die Übersicht die einzige Stelle ist, an der ein Wert auf dem Bildschirm
+landet, ohne dass jemand danach gefragt hat — und die vier Nachbarwerkzeuge haben Zugangsschlüssel.
+
+**Geschrieben wird über dieselbe Ersetzung wie die Vorlage** (`wizard.render`), nicht über einen
+TOML-Schreiber: ein erzeugter Schreiber verliert jeden Kommentar, und damit verlöre die Datei genau
+die Eigenschaft, die Weg 2 überhaupt sinnvoll macht.
+
+**Der erneute Lauf fragt Aufnahme- und Zielverzeichnis einzeln**, nicht wieder über den Basisordner.
+Sie stehen bewusst einzeln in der Datei (D3); ein zweiter Durchlauf über `data_root` würde ein
+Aufnahmeverzeichnis, das jemand auf eine andere Platte gelegt hat, stillschweigend zurückholen — und
+genau dieses Verzeichnis gehört nach D4 ausdrücklich nicht in einen Cloud-Ordner.
+
+**Eine unlesbare Datei überspringt Übersicht und Frage.** Sie ist kein Grund, das Einrichten zu
+beenden: der Lauf ist gerade das, was sie wieder in Ordnung bringt, und die Diagnose am Ende nennt
+den Fehler mit Datei und Zeile.
+
+Verworfen: **eine eigene Oberfläche für die Einstellungen** — sie wäre die dritte Quelle nach
+Vorlage und Datei, und die Kommentare müssten in ihr ein zweites Mal stehen. **Das Menü selbst
+fragen zu lassen** (ein Dialog je Wert) — das Fenster ist 280 px breit und trägt die Bedienung der
+Aufnahme; eine Kette von Dialogen ist schlechter als eine Textdatei mit Erklärungen. **Die Änderung
+sofort wirksam machen** (Konfiguration im laufenden Betrieb neu laden) — ein halb umgeschalteter
+Aufnahmeweg ist die teuerste aller Fehlerquellen, und der Neustart kostet einen Doppelklick.
+
 ## Risks / Trade-offs
 
 - **Die Verschiebung von 907 Zeilen bricht den Aufnahmekern, ohne dass Tests es merken** → die Aufteilung (D1) geschieht als erster Abschnitt der Aufgabenliste, ohne jede Verhaltensänderung, mit einer vollständigen Aufnahme als Abnahme; alle Verhaltensänderungen folgen danach in eigenen Aufgaben.

@@ -44,7 +44,7 @@ Das Wurzelverzeichnis MUST eine Einstiegsanleitung mit dem Namen `LIES-MICH-ZUER
 
 Sie MUST auf Deutsch verfasst sein, auch wenn die Entwicklerdokumentation des Repositorys englisch bleibt.
 
-Sie MUST genau diese acht Abschnitte in dieser Reihenfolge führen: Kopf mit Werkzeugname und je einem Satz zu Zweck und Anlass; „Was du brauchst"; „So richtest du es ein" mit nummerierten Schritten; „Im Alltag"; „Wenn etwas rot ist"; „Aktualisieren"; „Entfernen"; Ansprechpartner mit dem Hinweis, dass alles Technische in der Entwicklerdokumentation steht und nicht gebraucht wird. Der Abschnitt „Was du brauchst" MUST NOT ein Fremdprogramm verlangen, das die Einrichtung selbst beschafft. Die nummerierten Schritte MUST nennen, dass die Verknüpfung auf dem Desktop angelegt wird, und MUST das Symbol auf dem Desktop als Ergebnis nennen; sie MUST NOT einen Autostart-Ordner, ein Ziehen einer Verknüpfung oder ein Symbol im Infobereich nennen. „Im Alltag" MUST die Bedienung der Aufnahme und die Schaltfläche nennen, die das Menü im Anwendungsfenster öffnet. „Wenn etwas rot ist" MUST den Weg über dieses Menü zur Diagnose und das Weiterschicken des erzeugten Berichts nennen. „Entfernen" MUST die drei Schritte Fenster schließen, Desktop-Verknüpfung löschen, Ordner löschen nennen.
+Sie MUST genau diese acht Abschnitte in dieser Reihenfolge führen: Kopf mit Werkzeugname und je einem Satz zu Zweck und Anlass; „Was du brauchst"; „So richtest du es ein" mit nummerierten Schritten; „Im Alltag"; „Wenn etwas rot ist"; „Aktualisieren"; „Entfernen"; Ansprechpartner mit dem Hinweis, dass alles Technische in der Entwicklerdokumentation steht und nicht gebraucht wird. Der Abschnitt „Was du brauchst" MUST NOT ein Fremdprogramm verlangen, das die Einrichtung selbst beschafft. Die nummerierten Schritte MUST nennen, dass die Verknüpfung auf dem Desktop angelegt wird, und MUST das Symbol auf dem Desktop als Ergebnis nennen; sie MUST NOT einen Autostart-Ordner, ein Ziehen einer Verknüpfung oder ein Symbol im Infobereich nennen. „Im Alltag" MUST die Bedienung der Aufnahme und die Schaltfläche nennen, die das Menü im Anwendungsfenster öffnet. Er MUST außerdem beide Wege zum Ändern einer Einstellung nennen: die Einrichtung erneut doppelklicken oder im Menü des Fensters die Einstellungen öffnen. „Wenn etwas rot ist" MUST den Weg über dieses Menü zur Diagnose und das Weiterschicken des erzeugten Berichts nennen. „Entfernen" MUST die drei Schritte Fenster schließen, Desktop-Verknüpfung löschen, Ordner löschen nennen.
 
 Sie MUST die einzige Stelle im Repository sein, an der dieser Text steht. Die Entwicklerdokumentation MUST mit einem Verweis auf diese Datei beginnen und MUST NOT einen eigenen, an Kollegen gerichteten Einrichtungsteil führen. Der Menüpunkt für die Auskunft im Anwendungsfenster MUST den Pfad dieser Datei nennen, und die Beschreibung des Release MUST sie führen.
 
@@ -221,13 +221,19 @@ Die Einrichtung MUST prüfen, ob ffmpeg aufrufbar ist. Fehlt es, MUST es ohne Ad
 
 ### Requirement: Reihenfolge, Meldungen und Abschluss der Einrichtung
 
-Die Einrichtung MUST in dieser Reihenfolge ablaufen: Laufzeit, Umgebung, Konfiguration, externe Abhängigkeiten, Prüfung durch die Diagnose, Frage nach der Desktop-Verknüpfung, Frage nach dem Start. Jeder Schritt MUST eine lesbare Meldung über Beginn und Ergebnis erzeugen. Ein fehlgeschlagener Schritt MUST die Einrichtung beenden und MUST NOT stillschweigend übersprungen werden. Am Ende MUST die Einrichtung nennen, wo die Anwendung künftig gestartet wird und wo die Funktionen für Aktualisieren, Diagnose und Info im Anwendungsfenster liegen. Melden die Prüfungen mindestens einen harten Fehler, MUST die Einrichtung mit einem Exit-Code ungleich 0 enden und MUST NOT als „fertig" gemeldet werden.
+Die Einrichtung MUST in dieser Reihenfolge ablaufen: Laufzeit, Umgebung, Konfiguration, externe Abhängigkeiten, Prüfung durch die Diagnose, Frage nach der Desktop-Verknüpfung, Frage nach dem Start. Jeder Schritt MUST eine lesbare Meldung über Beginn und Ergebnis erzeugen. Ein fehlgeschlagener Schritt MUST die Einrichtung beenden und MUST NOT stillschweigend übersprungen werden. Am Ende MUST die Einrichtung nennen, wo die Anwendung künftig gestartet wird und wo die Funktionen für Aktualisieren, Diagnose und Info im Anwendungsfenster liegen. Die Abschlussausgabe MUST in jedem Lauf den Ort der Konfigurationsdatei nennen und beide Wege zum Ändern einer Einstellung: die Einrichtung erneut ausführen oder die Datei im Editor öffnen. Melden die Prüfungen mindestens einen harten Fehler, MUST die Einrichtung mit einem Exit-Code ungleich 0 enden und MUST NOT als „fertig" gemeldet werden.
 
 #### Scenario: Erfolgreiche Einrichtung
 
 - **WHEN** die Einrichtung ohne harten Fehler durchläuft
 - **THEN** ist der Exit-Code 0
 - **AND** die Ausgabe nennt den künftigen Startweg und das Menü im Anwendungsfenster
+
+#### Scenario: Der Weg zu den Einstellungen
+
+- **WHEN** ein Lauf der Einrichtung endet
+- **THEN** nennt die Abschlussausgabe den Ort der Konfigurationsdatei
+- **AND** sie nennt beide Wege zum Ändern: erneut einrichten oder die Datei im Editor öffnen
 
 #### Scenario: Diagnose meldet einen harten Fehler
 
@@ -257,11 +263,11 @@ Die Einrichtung MUST in dieser Reihenfolge ablaufen: Laufzeit, Umgebung, Konfigu
 
 ### Requirement: Idempotenz der Einrichtung
 
-Ein zweiter Lauf der Einrichtung auf einer bereits eingerichteten Installation MUST NOT eine vorhandene Konfiguration überschreiben, MUST NOT eine bereits vorhandene externe Abhängigkeit erneut installieren und MUST NOT die Umgebung ohne Anlass neu bauen. Er MUST melden, welche Schritte übersprungen wurden.
+Ein zweiter Lauf der Einrichtung auf einer bereits eingerichteten Installation MUST NOT eine vorhandene Konfiguration ungefragt überschreiben, MUST NOT eine bereits vorhandene externe Abhängigkeit erneut installieren und MUST NOT die Umgebung ohne Anlass neu bauen. Die Konfiguration ändert sich nur dort, wo der Benutzer im Einrichten ausdrücklich einen neuen Wert angibt, und um Schlüssel, die die Vorlage neu führt. Er MUST melden, welche Schritte übersprungen wurden.
 
 #### Scenario: Zweiter Lauf
 
-- **WHEN** die Einrichtung auf einer eingerichteten Installation erneut läuft
+- **WHEN** die Einrichtung auf einer eingerichteten Installation erneut läuft und der Benutzer keine Änderung verlangt
 - **THEN** bleibt die bestehende Konfiguration unverändert
 - **AND** die Ausgabe nennt die übersprungenen Schritte
 - **AND** der Exit-Code ist 0, sofern die Diagnose keinen harten Fehler meldet
