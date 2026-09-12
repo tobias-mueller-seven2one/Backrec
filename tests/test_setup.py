@@ -278,7 +278,7 @@ def test_a_second_run_leaves_the_settings_untouched(calm, tmp_path, monkeypatch)
     assert result.ok
     assert result.code == 0
     assert paths.config_path().read_bytes() == before
-    assert "unverändert übernommen" in printed
+    assert "gibt es schon" in printed
 
 
 def test_a_second_run_names_the_steps_it_skipped(calm, tmp_path, monkeypatch) -> None:

@@ -84,6 +84,16 @@ ENV_BOOTSTRAPPED = "BACKREC_ENV_READY"
 # places is deliberate: neither place is reachable from the other - whoever has
 # the window does not have the guide open, and whoever reads the guide has no
 # window yet.
+# Both ways to change a setting, named in the closing summary of every run.
+# Both, because they suit two different people: one runs Setup.cmd again and
+# answers questions, the other opens the file and reads the comments.
+SETTINGS_CHANGE_HINT = "Ändern: Setup.cmd erneut ausführen oder die Datei im Editor öffnen."
+
+# Said wherever the settings are opened. A changed value is read when the tool
+# starts, not while it runs -- and a colleague who changes a folder and then
+# waits for something to happen has no way of knowing that.
+SETTINGS_RESTART_HINT = "Änderungen gelten nach dem nächsten Start von Backrec."
+
 UNINSTALL_SENTENCES: tuple[str, str, str] = (
     "Schließe das Fenster.",
     "Lösche das Symbol vom Desktop.",
@@ -453,11 +463,34 @@ def _complete_settings(assistant: Assistant, config_path: Path, repo: Path) -> N
         assistant.note(wizard.completion_message(len(added)))
 
 
+def _review_settings(
+    assistant: Assistant, unattended: bool, config_path: Path, repo: Path
+) -> None:
+    """Show what is set and offer to change it.
+
+    Never a reason to abort, for the same reason as `_complete_settings`: the
+    settings that are there keep working, whether or not anyone looked at them.
+    """
+    if unattended:
+        return
+
+    try:
+        result = wizard.review(assistant, config_path, repo=repo)
+    except OSError as exc:
+        logger.warning("Einstellungen nicht aenderbar: %s", exc)
+        assistant.note("Die Einstellungen ließen sich nicht ändern -- sie bleiben, wie sie waren.")
+        return
+
+    if result.changed:
+        assistant.note(wizard.change_message(len(result.changed)))
+
+
 def _settle_settings(assistant: Assistant, unattended: bool, config_path: Path, repo: Path) -> bool:
     """Existing settings, a migrated `.env`, or the wizard - in that order."""
     if config_path.is_file():
-        assistant.ok(f"Die Einstellungen gibt es schon ({config_path}) -- unverändert übernommen")
+        assistant.ok(f"Die Einstellungen gibt es schon ({config_path})")
         _complete_settings(assistant, config_path, repo)
+        _review_settings(assistant, unattended, config_path, repo)
         return True
 
     migration = config_module.migrate_legacy(target=config_path, repo=repo)
@@ -623,13 +656,24 @@ def _offer_start(
     assistant.warn(outcome.message or "Der Start hat nicht geklappt")
 
 
-def _closing_note(everything_ok: bool) -> str:
-    if not everything_ok:
-        return "Noch nicht fertig. Ein zweiter Lauf nach dem Beheben zerstört nichts."
-    return (
-        "Fertig. Das Symbol liegt auf dem Desktop. Im Fenster öffnet das Zahnrad "
-        "oben rechts das Menü mit Diagnose, Aktualisieren und Auskunft."
-    )
+def _closing_note(everything_ok: bool, config_path: Path | None = None) -> str:
+    """The last block of a run: the state, then where the settings are.
+
+    Both ways to change them are named, even after a run that ended with open
+    points: whoever reads this has the file in front of them exactly once, and
+    the question "and how do I change that folder now" comes right here.
+    """
+    if everything_ok:
+        head = (
+            "Fertig. Das Symbol liegt auf dem Desktop. Im Fenster öffnet das Zahnrad "
+            "oben rechts das Menü mit Diagnose, Aktualisieren und Auskunft."
+        )
+    else:
+        head = "Noch nicht fertig. Ein zweiter Lauf nach dem Beheben zerstört nichts."
+
+    if config_path is None:
+        return head
+    return "\n".join((head, "", f"Deine Einstellungen: {config_path}", SETTINGS_CHANGE_HINT))
 
 
 def setup(
@@ -722,7 +766,7 @@ def setup(
     if offer_start and (everything_ok or start_after):
         _offer_start(ui, root, target, unattended=unattended, start_after=start_after)
 
-    ui.summary(paths.log_path(), _closing_note(everything_ok))
+    ui.summary(paths.log_path(), _closing_note(everything_ok, target))
 
     return SetupResult(
         ok=everything_ok,
@@ -971,6 +1015,42 @@ def open_logs() -> CommandResult:
         return CommandResult(ok=False, code=1, lines=(f"Ordner: {directory}",))
 
     return CommandResult(ok=True, lines=(f"Ordner: {directory}",))
+
+
+def open_settings(config_path: Path | None = None) -> CommandResult:
+    """Opens the settings file in whatever the system uses for text.
+
+    The second of the two ways to change a setting (the first is running the
+    setup again). Deliberately not an editor of our own choosing: the file
+    carries its explanations as comments, and whoever opens it should see it in
+    the program they already know.
+    """
+    target = paths.config_path(config_path)
+
+    if not target.is_file():
+        logger.warning("Einstellungen nicht vorhanden: %s", target)
+        return CommandResult(
+            ok=False,
+            code=1,
+            lines=(
+                "Was ist passiert: Es gibt noch keine Einstellungen.",
+                "Was tun: Setup.cmd im Ordner des Werkzeugs doppelklicken.",
+            ),
+        )
+
+    try:
+        if os.name == "nt":
+            os.startfile(str(target))  # noqa: S606 - exactly what the function is for
+        else:
+            subprocess.Popen(["xdg-open", str(target)])
+    except OSError as exc:
+        # Never fatal: the window that asked for it must not end because no
+        # editor appeared, and the location itself is still an answer.
+        logger.warning("Einstellungen liessen sich nicht oeffnen: %s", exc)
+        return CommandResult(ok=False, code=1, lines=(f"Die Einstellungen liegen hier: {target}",))
+
+    logger.info("Einstellungen geoeffnet: %s", target)
+    return CommandResult(ok=True, lines=(f"Einstellungen: {target}", SETTINGS_RESTART_HINT))
 
 
 def follow_logs(stream: TextIO | None = None) -> CommandResult:

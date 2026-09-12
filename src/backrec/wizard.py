@@ -22,6 +22,14 @@ A colleague never adds a setting by hand: the diagnosis used to report the drift
 and leave the handwork to them, which is precisely what it must not do
 (convention section 4, revision of 12.09.2026). Existing entries are never
 touched.
+
+Every setting of the template can be answered, not only the two folders
+(convention section 5 step 3, revision of 12.09.2026 in the evening). The first
+run asks the required values and then offers the remaining ones; a later run
+shows what is set and offers to change it. That makes "run Setup.cmd again" the
+official way to change a setting, and it is why the type of an answer is checked
+here rather than at the next start: a colleague who typed a word where a number
+belongs learns it while the question is still on screen.
 """
 
 from __future__ import annotations
@@ -29,12 +37,13 @@ from __future__ import annotations
 import os
 import re
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from . import paths
-from .config import missing_keys, read_toml
+from .config import ConfigError, missing_keys, read_toml
 from .console import Assistant
 from .logging_setup import get_logger
 
@@ -43,6 +52,50 @@ logger = get_logger(__name__)
 TARGET_FOLDER_NAME = "Input"
 RECORDING_FOLDER_NAME = "Recording"
 DATA_ROOT_FOLDER_NAME = "Aufnahmen"
+
+# The keys the base folder question answers. They are asked as one folder and
+# derived from it, never one by one -- on the first run.
+DERIVED_KEYS: tuple[str, ...] = ("recording_dir", "target_dir")
+
+# Key names whose value must never be echoed. None of them exists in this tool
+# today; the rule is kept because the overview is the one place where a value
+# would end up on screen without anyone asking for it.
+SECRET_MARKERS: tuple[str, ...] = ("token", "key", "passwort", "password", "secret", "geheim")
+
+# A key holding a location rather than a word.
+_PATH_KEY = re.compile(r"(_dir|_path)$")
+
+# How many wrong answers to one question before it is left as it was. Without a
+# limit a run that gets its answers from somewhere other than a keyboard -- a
+# closed channel, a test -- would ask the same question forever.
+MAX_ATTEMPTS = 3
+
+TRUE_WORDS: tuple[str, ...] = ("j", "ja", "y", "yes", "true", "1", "ein")
+FALSE_WORDS: tuple[str, ...] = ("n", "nein", "no", "false", "0", "aus")
+
+LOG_LEVELS: tuple[str, ...] = ("DEBUG", "INFO", "WARNING", "ERROR")
+
+
+class Kind(Enum):
+    """What an answer to a setting has to look like."""
+
+    BOOL = "bool"
+    NUMBER = "number"
+    LIST = "list"
+    PATH = "path"
+    CHOICE = "choice"
+    TEXT = "text"
+
+
+@dataclass(frozen=True)
+class Setting:
+    """One question: which key, what it means, what fits as an answer."""
+
+    key: str
+    kind: Kind
+    description: str = ""
+    choices: tuple[str, ...] = field(default_factory=tuple)
+    secret: bool = False
 
 # A key at the start of a line, used to attach a comment block to the key below
 # it while the template is parsed.
@@ -59,6 +112,14 @@ class WizardResult:
     values: dict[str, Any]
     handshake_written: bool = False
     created: bool = True
+
+
+@dataclass(frozen=True)
+class ReviewResult:
+    """What a later run did with the settings that were already there."""
+
+    config_path: Path
+    changed: tuple[str, ...] = field(default_factory=tuple)
 
 
 def default_data_root(env: Mapping[str, str] | None = None) -> Path:
@@ -221,6 +282,232 @@ def completion_message(count: int) -> str:
     return f"{count} neue Einstellungen mit Standardwerten ergänzt."
 
 
+def change_message(count: int) -> str:
+    """The one line a run reports about changed settings."""
+    if count == 1:
+        return "1 Einstellung geändert."
+    return f"{count} Einstellungen geändert."
+
+
+# --- The settings as questions ------------------------------------------------
+
+
+def choices_for(key: str) -> tuple[str, ...]:
+    """The permitted values of a setting, empty when it is free text.
+
+    Taken from the same table the validation uses, so that a value accepted here
+    cannot be rejected at the next start.
+    """
+    if key == "log_level":
+        return LOG_LEVELS
+    return ()
+
+
+def is_secret(key: str) -> bool:
+    return any(marker in key.lower() for marker in SECRET_MARKERS)
+
+
+def kind_of(key: str, value: Any) -> Kind:
+    """What an answer to this setting has to look like.
+
+    Derived from the template's own value instead of from a second table: the
+    template is the one place a setting exists, and a list that says "this one is
+    a number" would drift away from it on the first new key.
+    """
+    if isinstance(value, bool):
+        return Kind.BOOL
+    if isinstance(value, (int, float)):
+        return Kind.NUMBER
+    if isinstance(value, (list, tuple)):
+        return Kind.LIST
+    if choices_for(key):
+        return Kind.CHOICE
+    if _PATH_KEY.search(key):
+        return Kind.PATH
+    return Kind.TEXT
+
+
+def first_sentence(comment: str, limit: int = 100) -> str:
+    """One line of meaning out of a comment block of the template."""
+    joined = " ".join(line.strip() for line in comment.splitlines() if line.strip())
+    if not joined:
+        return ""
+
+    head = joined.split(". ")[0].rstrip(".")
+    if len(head) > limit:
+        head = head[: limit - 3].rstrip() + "..."
+    return f"{head}."
+
+
+def settings_from_template(
+    template_path: Path | None = None,
+    repo: Path | None = None,
+    *,
+    include_directories: bool = False,
+) -> tuple[Setting, ...]:
+    """Every setting of the template as a question, in the template's order.
+
+    The two working folders are left out on the first run: they are answered
+    there as one base folder. A later run does include them, because by then they
+    exist individually and a base folder would overwrite a folder someone
+    deliberately moved to another drive.
+    """
+    values = template_values(template_path, repo)
+    comments = template_comments(template_path, repo)
+
+    return tuple(
+        Setting(
+            key=key,
+            kind=kind_of(key, value),
+            description=first_sentence(comments.get(key, "")),
+            choices=choices_for(key),
+            secret=is_secret(key),
+        )
+        for key, value in values.items()
+        if not isinstance(value, dict) and (include_directories or key not in DERIVED_KEYS)
+    )
+
+
+def display_value(setting: Setting, value: Any) -> str:
+    """The value as it appears in the overview and in the brackets of a question."""
+    if setting.secret:
+        return "nicht gesetzt" if value in (None, "") else "gesetzt"
+    if value is None:
+        return "nicht gesetzt"
+    if isinstance(value, bool):
+        return "ja" if value else "nein"
+    if isinstance(value, (list, tuple)):
+        return ", ".join(str(item) for item in value)
+    return str(value) or "nicht gesetzt"
+
+
+def overview_lines(settings: Sequence[Setting], values: Mapping[str, Any]) -> list[str]:
+    """The compact overview of the current settings. Pure, therefore testable."""
+    return [
+        f"{setting.key}: {display_value(setting, values.get(setting.key))}" for setting in settings
+    ]
+
+
+def parse_answer(setting: Setting, answer: str, current: Any) -> Any:
+    """The typed value behind an answer, or a plain sentence saying what fits."""
+    text = answer.strip()
+
+    if setting.kind is Kind.BOOL:
+        if text.lower() in TRUE_WORDS:
+            return True
+        if text.lower() in FALSE_WORDS:
+            return False
+        raise ValueError("Bitte ja oder nein eingeben.")
+
+    if setting.kind is Kind.NUMBER:
+        try:
+            number = float(text.replace(",", "."))
+        except ValueError:
+            raise ValueError("Bitte eine Zahl eingeben, zum Beispiel 5.") from None
+        if number < 0:
+            raise ValueError("Bitte eine Zahl ab 0 eingeben.")
+        if isinstance(current, int) and not isinstance(current, bool) and number.is_integer():
+            return int(number)
+        return number
+
+    if setting.kind is Kind.LIST:
+        parts = [part.strip() for part in text.split(",") if part.strip()]
+        if not parts:
+            raise ValueError("Bitte mindestens einen Eintrag eingeben, mehrere mit Komma getrennt.")
+        return parts
+
+    if setting.kind is Kind.PATH:
+        if not text:
+            raise ValueError("Bitte einen Ordner angeben.")
+        return str(paths.expand_path(text))
+
+    if setting.kind is Kind.CHOICE:
+        if text == str(current) or text in setting.choices:
+            return text
+        raise ValueError("Bitte einen dieser Werte eingeben: " + ", ".join(setting.choices) + ".")
+
+    return text
+
+
+def ask_setting(assistant: Assistant, setting: Setting, current: Any) -> Any:
+    """One setting, asked until the answer fits -- at most MAX_ATTEMPTS times."""
+    default_text = display_value(setting, current)
+    if setting.description:
+        assistant.note(setting.description)
+
+    for _attempt in range(MAX_ATTEMPTS):
+        answer = assistant.ask(setting.key, default_text)
+        if answer == default_text:
+            return current
+        try:
+            return parse_answer(setting, answer, current)
+        except ValueError as exc:
+            assistant.note(str(exc))
+
+    assistant.note("Der bisherige Wert bleibt stehen.")
+    return current
+
+
+def ask_settings(
+    assistant: Assistant,
+    settings: Sequence[Setting],
+    values: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Walks the settings one question at a time and returns what changed."""
+    changed: dict[str, Any] = {}
+    for setting in settings:
+        current = values.get(setting.key)
+        answer = ask_setting(assistant, setting, current)
+        if answer != current:
+            changed[setting.key] = answer
+    return changed
+
+
+def review(
+    assistant: Assistant,
+    config_file: Path,
+    *,
+    unattended: bool = False,
+    template_path: Path | None = None,
+    repo: Path | None = None,
+) -> ReviewResult:
+    """Shows the settings that exist and offers to change them.
+
+    The overview comes first and the question second, because "change settings?"
+    without them is a question nobody can answer. Enter leaves everything as it
+    is, which is what makes running the setup again safe rather than a detour
+    through every value.
+    """
+    if unattended or not config_file.is_file():
+        return ReviewResult(config_path=config_file)
+
+    try:
+        current = read_toml(config_file)
+    except ConfigError as exc:
+        logger.warning("Einstellungen nicht lesbar -- keine Uebersicht: %s", exc)
+        return ReviewResult(config_path=config_file)
+
+    settings = settings_from_template(template_path, repo, include_directories=True)
+    assistant.note("Die Einstellungen sind gerade so:")
+    for line in overview_lines(settings, current):
+        assistant.note(f"  {line}")
+
+    if not assistant.ask_yes_no("Einstellungen ändern?", default=False):
+        return ReviewResult(config_path=config_file)
+
+    changed = ask_settings(assistant, settings, current)
+    if not changed:
+        return ReviewResult(config_path=config_file)
+
+    # Written through the same substitution as the template, so that every
+    # comment in the file survives a change.
+    config_file.write_text(
+        render(config_file.read_text(encoding="utf-8"), changed), encoding="utf-8"
+    )
+    logger.info("Einstellungen geaendert: %s", ", ".join(sorted(changed)))
+    return ReviewResult(config_path=config_file, changed=tuple(sorted(changed)))
+
+
 def write_config(
     target: Path,
     values: Mapping[str, Any],
@@ -322,6 +609,13 @@ def run(
         _show(assistant, directories)
 
     values: dict[str, Any] = {key: str(value) for key, value in directories.items()}
+
+    # Offered, not walked through: the required values are answered, everything
+    # else has a default that works, and a colleague who says no here gets
+    # exactly the template.
+    if not unattended and assistant.ask_yes_no("Weitere Einstellungen anpassen?", default=False):
+        settings = settings_from_template(template_path, repo)
+        values.update(ask_settings(assistant, settings, template_values(template_path, repo)))
 
     for directory in directories.values():
         try:

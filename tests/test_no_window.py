@@ -30,9 +30,13 @@ SPAWNING_CALLS = frozenset({"run", "Popen", "call", "check_call", "check_output"
 WINDOW_FLAGS = ("CREATE_NO_WINDOW", "CREATE_NEW_CONSOLE", "DETACHED_PROCESS")
 
 # Calls that are meant to put something on screen, keyed by module and the
-# function they sit in. Empty on purpose: this package opens folders through
-# `os.startfile`, which is not a subprocess at all.
-ALLOWED_WITHOUT_FLAG: dict[tuple[str, str], str] = {}
+# function they sit in. Folders are opened through `os.startfile`, which is not
+# a subprocess at all; the one entry here is the branch beside it.
+ALLOWED_WITHOUT_FLAG: dict[tuple[str, str], str] = {
+    ("control.py", "open_settings"): (
+        "xdg-open, and only outside Windows -- there the os.startfile branch above it runs"
+    ),
+}
 
 
 def enclosing_functions(tree: ast.AST) -> dict[int, str]:

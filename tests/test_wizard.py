@@ -143,7 +143,9 @@ def test_an_existing_handshake_is_the_suggestion(tmp_path, monkeypatch):
 def test_without_a_handshake_writing_one_is_offered(tmp_path, monkeypatch):
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "Profil"))
     handshake = tmp_path / "suite.toml"
-    assistant, _stream = make(answers=[str(tmp_path / "Basis"), "", "j"])
+    # Name the base folder, confirm both folders, decline the further settings,
+    # accept the shared file.
+    assistant, _stream = make(answers=[str(tmp_path / "Basis"), "", "n", "j"])
 
     result = wizard.run(assistant, tmp_path / "config.toml", handshake_path=handshake, repo=REPO)
 
@@ -154,7 +156,7 @@ def test_without_a_handshake_writing_one_is_offered(tmp_path, monkeypatch):
 def test_a_refusal_does_not_harm_the_setup(tmp_path, monkeypatch):
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "Profil"))
     handshake = tmp_path / "suite.toml"
-    assistant, _stream = make(answers=[str(tmp_path / "Basis"), "", "n"])
+    assistant, _stream = make(answers=[str(tmp_path / "Basis"), "", "n", "n"])
 
     result = wizard.run(assistant, tmp_path / "config.toml", handshake_path=handshake, repo=REPO)
 
