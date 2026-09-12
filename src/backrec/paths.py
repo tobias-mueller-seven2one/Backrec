@@ -34,6 +34,7 @@ GUIDE_FILE_NAME = "LIES-MICH-ZUERST.txt"
 
 PID_RECORD_NAME = "backrec.pid"
 STOP_REQUEST_NAME = "stop.request"
+RECORDING_MARKER_NAME = "recording.active"
 INSTALLED_RECORD_NAME = "installed.json"
 INSTALLED_MANIFEST_NAME = "release-manifest.json"
 
@@ -148,6 +149,15 @@ def stop_request_path(env: Mapping[str, str] | None = None) -> Path:
     return state_dir(env) / STOP_REQUEST_NAME
 
 
+def recording_marker_path(env: Mapping[str, str] | None = None) -> Path:
+    """Says that a recording is under way - readable from outside the window.
+
+    In the state folder rather than in memory, because the status report has to
+    answer the question from another process entirely.
+    """
+    return state_dir(env) / RECORDING_MARKER_NAME
+
+
 def installed_record_path(env: Mapping[str, str] | None = None) -> Path:
     return state_dir(env) / INSTALLED_RECORD_NAME
 
@@ -232,6 +242,7 @@ __all__ = [
     "log_path",
     "pid_record_path",
     "stop_request_path",
+    "recording_marker_path",
     "installed_record_path",
     "installed_manifest_path",
     "suite_handshake_path",

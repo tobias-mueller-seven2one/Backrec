@@ -207,6 +207,25 @@ def clear_stop_request(path: Path | None = None) -> None:
     (path or paths.stop_request_path()).unlink(missing_ok=True)
 
 
+# --- Whether a recording is running -------------------------------------------
+
+
+def mark_recording(path: Path | None = None) -> Path:
+    """Notes that a recording has begun, so `status` can see it from outside."""
+    target = path or paths.recording_marker_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(datetime.now().isoformat(timespec="seconds"), encoding="utf-8")
+    return target
+
+
+def clear_recording(path: Path | None = None) -> None:
+    (path or paths.recording_marker_path()).unlink(missing_ok=True)
+
+
+def is_recording(path: Path | None = None) -> bool:
+    return (path or paths.recording_marker_path()).is_file()
+
+
 def terminate_tree(process: psutil.Process, grace_seconds: float = 10.0) -> list[int]:
     """Ends a process and everything it started.
 
