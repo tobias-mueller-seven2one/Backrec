@@ -17,6 +17,8 @@ Im Alltag
   Doppelklick auf das Symbol öffnet ein kleines Fenster.
   REC beginnt die Aufnahme, STOP beendet sie und legt sie für dich ab.
   Das Zahnrad oben im Fenster öffnet das Menü.
+  Einstellungen ändern: Setup.cmd noch einmal doppelklicken oder im
+  Zahnrad-Menü Einstellungen öffnen.
 
 Wenn etwas rot ist
   Klicke auf das Zahnrad und dann auf "Diagnose". Es öffnet sich eine Datei.
