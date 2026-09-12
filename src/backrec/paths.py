@@ -16,7 +16,7 @@ import os
 from pathlib import Path
 from typing import Mapping
 
-from .version import VERSION_FILE_NAME, is_newer, parse_version, read_version
+from .version import UNKNOWN as UNKNOWN_VERSION, VERSION_FILE_NAME, is_newer, parse_version, read_version
 
 TOOL_NAME = "Backrec"
 SUITE_DIR_NAME = "MemoSuite"
@@ -217,6 +217,8 @@ __all__ = [
     "LEGACY_CONFIG_FILE_NAME",
     "GUIDE_FILE_NAME",
     "VERSION_FILE_NAME",
+    "UNKNOWN_VERSION",
+    "CLOUD_VARIABLE",
     "INSTALLED_MANIFEST_NAME",
     "REPO_MARKERS",
     "has_repo_marker",
