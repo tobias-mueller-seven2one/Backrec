@@ -260,10 +260,16 @@ def points_at_repo(contents: dict[str, str] | None, repo: Path) -> bool:
 def status(
     repo: Path | None = None,
     desktop: Path | None = None,
-    reader: ShortcutReader = read_link,
+    reader: ShortcutReader | None = None,
 ) -> ShortcutStatus:
-    """What is on the desktop right now. Reads, changes nothing."""
+    """What is on the desktop right now. Reads, changes nothing.
+
+    The reader is resolved here rather than in the signature: bound as a default
+    it would freeze the function at import time, and a caller replacing the COM
+    route would then be quietly ignored.
+    """
     root = repo or paths.repo_root()
+    read = reader or read_link
     link = shortcut_path(desktop)
 
     if not link.is_file():
@@ -273,7 +279,7 @@ def status(
             notes=(f"Auf dem Desktop {link.parent} liegt keine Verknüpfung.",),
         )
 
-    contents = reader(link)
+    contents = read(link)
     if contents is None:
         return ShortcutStatus(
             path=link,
@@ -311,10 +317,11 @@ def status(
 def create(
     repo: Path | None = None,
     desktop: Path | None = None,
-    writer: ShortcutWriter = write_link,
+    writer: ShortcutWriter | None = None,
 ) -> ShortcutResult:
     """Builds the shortcut. An existing one is replaced without failing."""
     root = repo or paths.repo_root()
+    write = writer or write_link
     spec = build_spec(root)
 
     if not Path(spec.target).is_file():
@@ -326,7 +333,7 @@ def create(
         )
 
     link = shortcut_path(desktop)
-    error = writer(link, spec)
+    error = write(link, spec)
     if error is not None:
         return ShortcutResult(
             ok=False,
