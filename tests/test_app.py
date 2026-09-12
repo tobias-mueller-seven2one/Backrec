@@ -59,6 +59,23 @@ def test_the_gear_displaces_no_recording_control(window) -> None:
     assert window.btn_discard.winfo_ismapped()
 
 
+def test_the_gear_shows_and_hides_its_hover_text(window) -> None:
+    """A gear without a label is not self-explanatory - and an untried tooltip
+    is a second window that only fails in front of the user."""
+    # On the canvas, not on the button: CustomTkinter forwards `bind` to the
+    # canvas and the text label, and a real mouse enters those, not the frame
+    # around them.
+    canvas = window.menu_button._canvas
+
+    canvas.event_generate("<Enter>")
+    window.update()
+    assert window._tooltip is not None
+
+    canvas.event_generate("<Leave>")
+    window.update()
+    assert window._tooltip is None
+
+
 def test_the_menu_carries_the_four_entries(window) -> None:
     labels = [window._menu.entrycget(index, "label") for index in range(4)]
 
