@@ -7,6 +7,8 @@ pointing it at a throwaway folder is also the test of that claim.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from backrec import logging_setup, paths
@@ -24,6 +26,12 @@ def suite_home(tmp_path, monkeypatch):
     logging_setup.reset_for_tests()
     yield home
     logging_setup.reset_for_tests()
+
+
+@pytest.fixture
+def repo() -> Path:
+    """The tool's own folder - the settings template is read from there."""
+    return paths.repo_root()
 
 
 @pytest.fixture

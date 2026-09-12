@@ -12,7 +12,6 @@ simply did not start - no window, no message, no log (design D5).
 
 from __future__ import annotations
 
-import os
 import sys
 import threading
 import time
@@ -21,9 +20,10 @@ from pathlib import Path
 
 import customtkinter as ctk
 
+from . import instance, paths, preflight
 from .delivery import unique_destination
 from .devices import PYCAW_AVAILABLE, get_default_comm_device_name, get_default_speaker_device_name
-from .logging_setup import get_logger
+from .logging_setup import bootstrap, get_logger
 from .merge import merge_audio_files
 from .recording import DEVICE_POLL_SEC, MicRecorder, SystemRecorder
 
@@ -560,16 +560,64 @@ class RecorderApp(ctk.CTk):
         self.after(UI_POLL_MS, self._poll_ui_loop)
 
 
+EXIT_ALREADY_RUNNING = 3
+EXIT_PREFLIGHT_FAILED = 2
+
+
+def _report_already_running(pid: int) -> None:
+    """Says that the tool runs already - visibly, even without a console.
+
+    Only reached when Windows refused the foreground change (design D6). The
+    exit code is the same in both cases, so nothing but this sentence depends on
+    which of the two happened.
+    """
+    log.info("Zweiter Start abgewiesen, Anwendung %d laeuft bereits", pid)
+    try:
+        import tkinter
+        from tkinter import messagebox
+
+        root = tkinter.Tk()
+        root.withdraw()
+        messagebox.showinfo(
+            paths.TOOL_NAME,
+            f"{paths.TOOL_NAME} läuft bereits. Das Fenster ist geöffnet, "
+            "vielleicht hinter einem anderen.",
+        )
+        root.destroy()
+    except Exception:  # noqa: BLE001 - the log entry is the part that matters
+        log.warning("Hinweis auf die laufende Anwendung liess sich nicht anzeigen", exc_info=True)
+
+
 def main() -> int:
-    """Opens the window. The folders still come from the environment here; the
-    checked start sequence takes over in a later step (design D5)."""
-    recording_dir = Path(os.environ.get("BACKREC_RECORDING_DIR", Path.home() / "Backrec" / "Recording"))
-    target_dir = Path(os.environ.get("BACKREC_TARGET_DIR", Path.home() / "Backrec" / "Output"))
-    recording_dir.mkdir(parents=True, exist_ok=True)
-    target_dir.mkdir(parents=True, exist_ok=True)
+    """The checked way into the window (design D5, D6).
+
+    Log first, then the single-instance check, then the preflight, and only
+    afterwards a window. Every step before the window is one that used to fail
+    silently under `pythonw`.
+    """
+    bootstrap()
+
+    running = instance.running_instance()
+    if running is not None:
+        if not instance.raise_window(running.pid):
+            _report_already_running(running.pid)
+        else:
+            log.info("Zweiter Start abgewiesen, Fenster der Anwendung %d nach vorn geholt", running.pid)
+        return EXIT_ALREADY_RUNNING
+
+    result = preflight.run()
+    if not result.ok or result.config is None:
+        if result.problem is not None:
+            preflight.show_error(result.problem)
+        return EXIT_PREFLIGHT_FAILED
 
     configure_appearance()
-    RecorderApp(recording_dir, target_dir).mainloop()
+    instance.write_record()
+    try:
+        RecorderApp(result.config.recording_dir, result.config.target_dir).mainloop()
+    finally:
+        instance.clear_record()
+        instance.clear_stop_request()
     return 0
 
 

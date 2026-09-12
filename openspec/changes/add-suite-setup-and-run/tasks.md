@@ -35,10 +35,10 @@
 
 ## 5. Preflight und Startsequenz
 
-- [ ] 5.1 `src/backrec/preflight.py` mit der Prüfkette aus design.md D5 implementieren (Konfiguration vorhanden, parsebar und vollständig, `recording_dir` anlegbar und beschreibbar, `target_dir` vorhanden und beschreibbar, ffmpeg aufrufbar) und mit Tests belegen, dass jede Ursache einzeln erkannt, benannt und mit einem nächsten Schritt versehen wird (Spec `run-lifecycle`, Requirement „Prüfende Startsequenz mit sichtbarem Fehler")
+- [x] 5.1 `src/backrec/preflight.py` mit der Prüfkette aus design.md D5 implementieren (Konfiguration vorhanden, parsebar und vollständig, `recording_dir` anlegbar und beschreibbar, `target_dir` vorhanden und beschreibbar, ffmpeg aufrufbar) und mit Tests belegen, dass jede Ursache einzeln erkannt, benannt und mit einem nächsten Schritt versehen wird (Spec `run-lifecycle`, Requirement „Prüfende Startsequenz mit sichtbarem Fehler")
 - [ ] 5.2 Fehlerdialog über `tkinter.messagebox.showerror` an den Preflight anbinden, Protokolleintrag schreiben, mit Exit-Code ungleich 0 enden; verifizieren, dass ein Start unter `pythonw` mit ungültigem `recording_dir` einen sichtbaren Dialog mit Pfad und Ursache erzeugt und nicht still ausbleibt (Spec `run-lifecycle`, Requirement „Prüfende Startsequenz mit sichtbarem Fehler")
-- [ ] 5.3 Verzeichnisanlage aus der Modulebene (`main.pyw:37-38`) in den Preflight verlagern und verifizieren, dass ein Import des Pakets keine Verzeichnisse mehr erzeugt (Test gegen ein temporäres Suite-Verzeichnis) (Spec `run-lifecycle`, Requirement „Prüfende Startsequenz mit sichtbarem Fehler")
-- [ ] 5.4 Einen vorgefundenen Stop-Sentinel im Preflight löschen und verifizieren, dass ein liegengebliebener Sentinel einen Neustart nicht sofort wieder beendet (design.md D10)
+- [x] 5.3 Verzeichnisanlage aus der Modulebene (`main.pyw:37-38`) in den Preflight verlagern und verifizieren, dass ein Import des Pakets keine Verzeichnisse mehr erzeugt (Test gegen ein temporäres Suite-Verzeichnis) (Spec `run-lifecycle`, Requirement „Prüfende Startsequenz mit sichtbarem Fehler")
+- [x] 5.4 Einen vorgefundenen Stop-Sentinel im Preflight löschen und verifizieren, dass ein liegengebliebener Sentinel einen Neustart nicht sofort wieder beendet (design.md D10)
 
 ## 6. Aufnahmeergebnis und Verhalten bei Merge-Fehler
 
