@@ -1,11 +1,10 @@
-﻿# Bootstrap fuer Setup.cmd: Zonenkennung entfernen, Hilfsprogramm beschaffen,
-# Arbeitsumgebung aufbauen.
+﻿# Bootstrap for Setup.cmd.
 #
-# Warum ueberhaupt ein Skript vor dem eigentlichen Einrichten: das Einrichten
-# selbst laeuft in der Arbeitsumgebung, die es hier erst gibt. Und die
-# Zonenkennung muss weg, bevor Windows das naechste Hilfsskript blockiert.
+# Why a script at all before the actual setup: the setup itself runs in the
+# working environment that only comes into being here. And the zone mark has to
+# go before Windows blocks the next helper script.
 #
-# PowerShell 5.1 kompatibel: kein ternaerer Operator, kein ?? und kein
+# PowerShell 5.1 compatible: no ternary operator, no ?? and no
 # ForEach-Object -Parallel.
 
 [CmdletBinding()]
@@ -22,22 +21,22 @@ function Write-Schlecht($was, $tun) {
     Write-Host "        Was tun: $tun"
 }
 
-# --- Zonenkennung ------------------------------------------------------------
-# Aus dem Internet bezogene Archive geben eine Zonenkennung an jede entpackte
-# Datei weiter. Der eine Sicherheitsdialog beim allerersten Doppelklick auf
-# Setup.cmd laesst sich damit nicht vermeiden -- jeder weitere schon.
+# --- Zone mark ---------------------------------------------------------------
+# An archive fetched from the internet passes a zone mark on to every file it
+# unpacks. The one security dialog on the very first double click of Setup.cmd
+# cannot be avoided that way -- every further one can.
 try {
     Get-ChildItem -Path $repo -Recurse -File -Force -ErrorAction SilentlyContinue |
         Where-Object { $_.FullName -notmatch '\\\.git\\' -and $_.FullName -notmatch '\\\.venv\\' } |
         Unblock-File -ErrorAction SilentlyContinue
 } catch {
-    # Nicht fatal: schlimmstenfalls erscheint ein weiterer Sicherheitsdialog.
+    # Not fatal: at worst one more security dialog appears.
     Write-Host '    [!] Die Kennzeichnung aus dem Internet ließ sich nicht entfernen.'
     Write-Host '        Es kann daher ein weiterer Sicherheitsdialog erscheinen; dort'
     Write-Host '        in den Eigenschaften der Datei auf Zulassen klicken.'
 }
 
-# --- Hilfsprogramm -----------------------------------------------------------
+# --- Helper program ----------------------------------------------------------
 Write-Schritt 'Vorbereitung: Hilfsprogramme'
 
 $uv = Get-Command uv -ErrorAction SilentlyContinue
@@ -67,27 +66,27 @@ if (-not $uv) {
 }
 Write-Gut 'Hilfsprogramm vorhanden'
 
-# --- Arbeitsumgebung ---------------------------------------------------------
+# --- Working environment -----------------------------------------------------
 Write-Schritt 'Vorbereitung: Arbeitsumgebung'
 
-# Ein Deinstallieren, das aus der Arbeitsumgebung selbst lief, kann sie nicht
-# vollstaendig entfernen: Windows gibt die laufende Programmdatei nicht frei.
-# Zurueck bleibt ein Ordner ohne pyvenv.cfg, den ein erneutes Aufbauen
-# kommentarlos stehen laesst -- und jeder Start scheitert danach.
+# An uninstall that ran from inside the working environment cannot remove it
+# completely: Windows does not release the running executable. What stays behind
+# is a folder without pyvenv.cfg that a rebuild leaves standing without a word
+# -- and every start fails from then on.
 if ((Test-Path '.venv') -and -not (Test-Path '.venv\pyvenv.cfg')) {
     Write-Host '    Eine unvollständige Arbeitsumgebung wird neu aufgebaut.'
     Remove-Item -Recurse -Force '.venv' -ErrorAction SilentlyContinue
 }
 
-# --reinstall-package ist keine Vorsicht, sondern Pflicht: ein Abgleich gegen die
-# festgeschriebene Liste sieht nur die Fremdpakete. Die Dateien dieses Werkzeugs
-# selbst gelten ihm als unveraendert, auch wenn gerade ein neues Archiv
-# darueberkopiert wurde. Ohne diese Angabe liefe nach einer Aktualisierung
-# weiter der alte Stand, und zwar lautlos.
+# --reinstall-package is not caution but duty: a sync against the locked list
+# only looks at the third-party packages. The files of this tool itself count as
+# unchanged to it, even when a new archive has just been copied over them.
+# Without this switch the old state would keep running after an update, and
+# silently at that.
 #
-# Hier und nicht im Einrichten selbst: das Einrichten laeuft in der
-# Arbeitsumgebung, die es ersetzen muesste, und Windows gibt eine laufende
-# Programmdatei nicht frei. Dieses Skript steht ausserhalb.
+# Here and not in the setup itself: the setup runs in the working environment it
+# would have to replace, and Windows does not release a running executable. This
+# script stands outside of it.
 & uv sync --locked --no-dev --no-editable --reinstall-package backrec
 if ($LASTEXITCODE -ne 0) {
     Write-Schlecht 'Die Arbeitsumgebung ließ sich nicht aufbauen.' `

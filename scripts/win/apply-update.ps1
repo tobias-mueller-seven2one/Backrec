@@ -1,17 +1,15 @@
-﻿# Spiegelt eine gepruefte, entpackte neue Fassung ein, waehrend sich Backrec
-# gerade beendet.
+﻿# Mirrors a checked, already unpacked new version in while Backrec shuts down.
 #
-# Warum ausserhalb der Arbeitsumgebung: der Code, der aktualisiert, laeuft aus
-# genau dem Ordner, der ersetzt werden soll. Windows haelt die geladene
-# Programmdatei offen, solange der Prozess lebt -- ein Prozess kann weder seinen
-# eigenen Ordner umbenennen noch sich selbst ueberschreiben und danach
-# weiterlaufen. Den letzten Schritt macht deshalb jemand, der daneben steht.
-# Windows PowerShell 5.1 liegt auf jedem Windows 11 und braucht weder die
-# Arbeitsumgebung noch das Hilfsprogramm.
+# Why this runs outside the working environment: the code that updates lives in
+# the very folder that is to be replaced. Windows keeps the loaded executable
+# open while the process lives -- a process can neither rename its own folder nor
+# overwrite itself and keep running. So the last leg is done by someone standing
+# outside. Windows PowerShell 5.1 is on every Windows 11 and needs neither the
+# working environment nor the helper program.
 #
-# Gespiegelt statt getauscht: die Arbeitsumgebung liegt im Ordner, gehoert nicht
-# zum Archiv und soll nicht neu aufgebaut werden muessen; und der Pfad des
-# Ordners steckt in der Verknuepfung auf dem Desktop.
+# Mirrored instead of swapped: the working environment lives in the folder, does
+# not belong to the archive and should not have to be rebuilt; and the folder's
+# path is written into the shortcut on the desktop.
 
 [CmdletBinding()]
 param(
@@ -33,7 +31,7 @@ function Write-Zeile($text) {
         New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
         Add-Content -Path $logFile -Value "$stamp $text" -Encoding UTF8
     } catch {
-        # Eine nicht schreibbare Aufzeichnung darf das Aktualisieren nicht stoppen.
+        # An unwritable record must never stop the update itself.
     }
 }
 
@@ -41,7 +39,7 @@ $Host.UI.RawUI.WindowTitle = 'Backrec wird aktualisiert'
 Write-Host 'Backrec wird aktualisiert ...'
 Write-Zeile "Start (Ordner: $RepoPath, Nachbarordner: $StagingPath)"
 
-# --- Auf das Ende der laufenden Anwendung warten ------------------------------
+# --- Wait for the running application to end ----------------------------------
 $deadline = (Get-Date).AddSeconds($WaitSeconds)
 while ((Get-Date) -lt $deadline) {
     $alive = Get-Process -Id $WaitForPid -ErrorAction SilentlyContinue
@@ -58,7 +56,7 @@ if (Get-Process -Id $WaitForPid -ErrorAction SilentlyContinue) {
     exit 1
 }
 
-# --- Die bisherige Liste lesen, bevor sie ueberschrieben wird -----------------
+# --- Read the previous list before it is overwritten --------------------------
 $alteDateien = @()
 if (Test-Path $ManifestPath) {
     try {
@@ -79,7 +77,7 @@ if (Test-Path $neueListe) {
     exit 1
 }
 
-# --- Spiegeln -----------------------------------------------------------------
+# --- Mirror -------------------------------------------------------------------
 $gespiegelt = 0
 foreach ($relativ in $neueDateien) {
     $quelle = Join-Path $StagingPath ($relativ -replace '/', '\')
@@ -91,13 +89,13 @@ foreach ($relativ in $neueDateien) {
     Copy-Item -Path $quelle -Destination $ziel -Force
     $gespiegelt++
 }
-# Die Liste fuehrt sich nicht selbst auf. Ohne diese Zeile bliebe die Liste der
-# vorherigen Fassung im Ordner stehen -- und die Einrichtung gleich danach haelt
-# jede Datei, die neu in dieser Fassung ist, fuer eine Altlast und loescht sie.
+# The list does not name itself. Without this line the previous version's list
+# would stay behind in the folder -- and the setup right afterwards would take
+# every file that is new in this version for a leftover and delete it.
 Copy-Item -Path $neueListe -Destination (Join-Path $RepoPath 'release-manifest.json') -Force
 Write-Zeile "$gespiegelt Datei(en) übernommen."
 
-# --- Altdateien entfernen ----------------------------------------------------
+# --- Remove files that no longer belong -------------------------------------
 $entfernt = 0
 foreach ($relativ in $alteDateien) {
     if ($neueDateien -contains $relativ) { continue }
@@ -111,25 +109,25 @@ Write-Zeile "$entfernt nicht mehr benötigte Datei(en) entfernt."
 
 Copy-Item -Path $neueListe -Destination $ManifestPath -Force
 
-# Erst jetzt: bis hierher war der Nachbarordner der Rueckweg.
+# Only now: up to here the neighbouring folder was the way back.
 Remove-Item -Path $StagingPath -Recurse -Force -ErrorAction SilentlyContinue
 
-# --- Ohne Rueckfragen einrichten, dann wieder starten -------------------------
-# --start, weil Backrec sich fuer diese Aktualisierung selbst beendet hat: ohne
-# den Schalter fragt der unbeaufsichtigte Lauf nichts und startet nichts.
+# --- Set up without questions, then start again -------------------------------
+# --start, because Backrec ended itself for this update: without the switch the
+# unattended run asks nothing and starts nothing.
 #
-# Ueber Setup.cmd statt mit einem eigenen Abgleich: Setup.cmd ruft zuerst
-# scripts\win\bootstrap-uv.ps1 auf, und dort steht --reinstall-package, das nach
-# dem Spiegeln Pflicht ist -- ein Abgleich ohne das liesse lautlos den alten
-# Stand weiterlaufen. Beide Skripte stehen ausserhalb der Arbeitsumgebung, und
-# genau das ist die Voraussetzung. Wer diesen Aufruf ersetzt, muss das Neu-
-# Einrichten des eigenen Pakets mitnehmen.
+# Through Setup.cmd rather than a sync of our own: Setup.cmd calls
+# scripts\win\bootstrap-uv.ps1 first, and that is where --reinstall-package
+# stands, which is mandatory after mirroring -- a sync without it would silently
+# keep the old state running. Both scripts live outside the working environment,
+# and that is exactly the precondition. Whoever replaces this call has to bring
+# the reinstall of our own package along.
 #
-# Start-Process mit vollem Pfad, nicht "cmd /c Setup.cmd": Push-Location setzt
-# nur den Ort dieser Sitzung, nicht das Arbeitsverzeichnis, das ein Kindprozess
-# erbt. Das startende cmd suchte Setup.cmd deshalb dort, wo Backrec gestartet
-# wurde, fand nichts -- und das Aktualisieren endete mit gespiegelten Dateien,
-# ohne nachgezogene Arbeitsumgebung und ohne Neustart.
+# Start-Process with the full path, not "cmd /c Setup.cmd": Push-Location only
+# moves the location of this session, not the working directory a child process
+# inherits. The starting cmd therefore looked for Setup.cmd wherever Backrec had
+# been started from, found nothing -- and the update ended with mirrored files,
+# no environment brought up to date and no restart.
 Write-Zeile 'Die Einrichtung wird ohne Rückfragen nachgezogen.'
 $einrichten = Join-Path $RepoPath 'Setup.cmd'
 if (-not (Test-Path $einrichten)) {
@@ -141,17 +139,17 @@ if (-not (Test-Path $einrichten)) {
     exit 1
 }
 
-# -PassThru mit WaitForExit statt -Wait: -Wait wartet auf den Vorgang *und alle
-# seine Nachkommen*, und das Einrichten startet Backrec zum Schluss abgekoppelt.
-# Damit wartete dieses Fenster, solange Backrec laeuft -- also bis zum Feierabend,
-# ohne je "fertig" zu sagen.
+# -PassThru with WaitForExit instead of -Wait: -Wait waits for the process *and
+# all its descendants*, and the setup starts Backrec detached at the end. This
+# window therefore waited for as long as Backrec runs -- until knocking-off time,
+# without ever saying "finished".
 $lauf = Start-Process -FilePath $einrichten `
                       -ArgumentList '--unattended', '--start' `
                       -WorkingDirectory $RepoPath `
                       -NoNewWindow -PassThru
-# Das Abfragen von .Handle merkt sich die Kennung des Vorgangs. Ohne diese Zeile
-# bleibt .ExitCode nach dem Warten leer -- und dann sagte dieses Fenster nach
-# jedem gelungenen Aktualisieren, es sei noch etwas offen.
+# Reading .Handle makes the process id stick. Without this line .ExitCode stays
+# empty after the wait -- and this window then reported something left open after
+# every successful update.
 $null = $lauf.Handle
 $lauf.WaitForExit()
 $code = $lauf.ExitCode
