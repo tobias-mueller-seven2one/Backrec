@@ -43,6 +43,10 @@ REPORT_LIMIT = 20
 REPORT_PREFIX = "diagnose-"
 
 LOCK_CHECK_TIMEOUT_SECONDS = 120
+
+# The diagnosis is reachable from the window, which owns no console: without the
+# flag its checks would each open a terminal window (see `merge.NO_WINDOW`).
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 PROBE_NAME = ".backrec-doctor-probe"
 
 CATEGORY_RUNTIME = "Laufzeit"
@@ -835,6 +839,7 @@ def environment_matches_lock(root: Path) -> bool | None:
             encoding="utf-8",
             errors="replace",
             timeout=LOCK_CHECK_TIMEOUT_SECONDS,
+            creationflags=NO_WINDOW,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         logger.debug("Abgleich mit der festgeschriebenen Liste nicht moeglich: %s", exc)

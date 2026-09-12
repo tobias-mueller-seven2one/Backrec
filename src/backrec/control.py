@@ -38,6 +38,20 @@ from .logging_setup import close_files, configure_logging, get_logger
 
 logger = get_logger(__name__)
 
+# Everything this module runs to answer a question is also reachable from the
+# window, which owns no console. Without the flag Windows hands each of those a
+# console of its own (see `merge.NO_WINDOW`).
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+# A console of its own, and only that. Started without one, `powershell.exe`
+# gets no console at all, and Windows PowerShell 5.1 then ends immediately with
+# a success code -- the update would report success, mirror nothing and show
+# nothing. CREATE_NEW_CONSOLE and DETACHED_PROCESS contradict each other (the
+# first asks for a window, the second forbids one), so the flag stands alone.
+# The window is wanted for a second reason: this is the one stretch of the
+# update nobody is watching, and the helper holds it open when something fails.
+CREATE_NEW_CONSOLE = 0x00000010
+
 SETUP_STEPS = 7
 
 START_READY_TIMEOUT_SECONDS = 30.0
@@ -150,6 +164,7 @@ def _run(
             encoding="utf-8",
             errors="replace",
             timeout=timeout,
+            creationflags=NO_WINDOW,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         return subprocess.CompletedProcess(args=command, returncode=1, stdout="", stderr=str(exc))
@@ -1079,7 +1094,7 @@ def apply_archive(
             str(paths.installed_manifest_path()),
         ]
         try:
-            subprocess.Popen(command, close_fds=True)
+            subprocess.Popen(command, close_fds=True, creationflags=CREATE_NEW_CONSOLE)
         except OSError as exc:
             logger.error("Helfer fuer das Aktualisieren nicht startbar: %s", exc)
             return CommandResult(

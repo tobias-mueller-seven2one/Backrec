@@ -49,6 +49,11 @@ logger = get_logger(__name__)
 MANIFEST_NAME = paths.INSTALLED_MANIFEST_NAME
 
 LOCK_CHECK_TIMEOUT_SECONDS = 180
+
+# Building a release only ever happens from a console, so no window would appear
+# here anyway. The flag stands for the sake of one rule that holds everywhere
+# rather than a per-call judgement (see `merge.NO_WINDOW`).
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 LIST_FILES_TIMEOUT_SECONDS = 120
 
 # Folders that never belong in the archive. Two groups: what the setup itself
@@ -203,6 +208,7 @@ def tracked_files(root: Path) -> list[Path] | None:
             cwd=str(root),
             capture_output=True,
             timeout=LIST_FILES_TIMEOUT_SECONDS,
+            creationflags=NO_WINDOW,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         logger.warning("Versionierte Dateien nicht abrufbar -- es wird gelaufen: %s", exc)
@@ -265,6 +271,7 @@ def check_worktree(root: Path) -> None:
             encoding="utf-8",
             errors="replace",
             timeout=LIST_FILES_TIMEOUT_SECONDS,
+            creationflags=NO_WINDOW,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         raise ReleaseError(f"Der Stand des Ordners liess sich nicht pruefen: {exc}") from exc
@@ -291,6 +298,7 @@ def check_lockfile(root: Path) -> None:
             encoding="utf-8",
             errors="replace",
             timeout=LOCK_CHECK_TIMEOUT_SECONDS,
+            creationflags=NO_WINDOW,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         raise ReleaseError(f"Die festgeschriebene Liste liess sich nicht pruefen: {exc}") from exc

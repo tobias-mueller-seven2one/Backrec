@@ -22,6 +22,11 @@ from .logging_setup import get_logger
 
 logger = get_logger(__name__)
 
+# Reached from the window and from the diagnosis, neither of which owns a
+# console: without the flag every probe would open a terminal window of its own
+# (see `merge.NO_WINDOW`).
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 FFMPEG_NAME = "ffmpeg"
 VERSION_TIMEOUT_SECONDS = 5
 INSTALL_TIMEOUT_SECONDS = 900
@@ -64,6 +69,7 @@ def run_command(command: list[str], timeout: float = INSTALL_TIMEOUT_SECONDS) ->
             encoding="utf-8",
             errors="replace",
             timeout=timeout,
+            creationflags=NO_WINDOW,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         return subprocess.CompletedProcess(args=command, returncode=1, stdout="", stderr=str(exc))

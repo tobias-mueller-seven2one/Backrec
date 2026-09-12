@@ -20,6 +20,13 @@ MERGE_SAMPLERATE = 44100
 MERGE_CHANNELS = 1
 MERGE_TIMEOUT_SECONDS = 120
 
+# This runs after every single recording, from a window that owns no console:
+# the application starts through pythonw.exe. A console child started from there
+# gets a brand-new console, and with Windows Terminal as the default host that is
+# a terminal window flashing up over whatever the user is doing at the end of
+# each take. On any other platform the flag is 0.
+NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 # Below this a WAV carries no usable audio - it is a header and little else.
 MIN_USABLE_BYTES = 1024
 
@@ -40,7 +47,13 @@ def merge_audio_files(mic_path: Path, system_path: Path, output_path: Path) -> t
     log.info(f"[MERGE] FFmpeg-Befehl: {' '.join(cmd)}")
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=MERGE_TIMEOUT_SECONDS)
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=MERGE_TIMEOUT_SECONDS,
+            creationflags=NO_WINDOW,
+        )
     except FileNotFoundError:
         log.error("[MERGE] ffmpeg nicht gefunden (nicht installiert oder nicht im PATH)", exc_info=True)
         return False, "ffmpeg nicht gefunden"
