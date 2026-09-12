@@ -78,10 +78,24 @@ def test_the_gear_shows_and_hides_its_hover_text(window) -> None:
     assert window._tooltip is None
 
 
-def test_the_menu_carries_the_four_entries(window) -> None:
-    labels = [window._menu.entrycget(index, "label") for index in range(4)]
+def test_the_menu_carries_the_five_entries(window) -> None:
+    labels = [window._menu.entrycget(index, "label") for index in range(5)]
 
-    assert labels == [app.MENU_UPDATE, app.MENU_DOCTOR, app.MENU_LOGS, app.MENU_ABOUT]
+    assert labels == [
+        app.MENU_UPDATE,
+        app.MENU_DOCTOR,
+        app.MENU_LOGS,
+        app.MENU_SETTINGS,
+        app.MENU_ABOUT,
+    ]
+
+
+def test_the_settings_sit_at_position_nine_of_the_suite_order(window) -> None:
+    """After the logs, before the details - as in the tray of the neighbours."""
+    labels = [window._menu.entrycget(index, "label") for index in range(5)]
+
+    assert labels.index(app.MENU_SETTINGS) == labels.index(app.MENU_LOGS) + 1
+    assert labels.index(app.MENU_ABOUT) == labels.index(app.MENU_SETTINGS) + 1
 
 
 # --- Menu state ---------------------------------------------------------------
@@ -89,10 +103,11 @@ def test_the_menu_carries_the_four_entries(window) -> None:
 
 def test_without_a_recording_every_entry_can_be_chosen() -> None:
     assert app.menu_entry(app.MENU_DOCTOR, recording=False) == (app.MENU_DOCTOR, "normal")
+    assert app.menu_entry(app.MENU_SETTINGS, recording=False) == (app.MENU_SETTINGS, "normal")
 
 
-def test_during_a_recording_the_two_long_entries_are_locked_with_a_reason() -> None:
-    for label in (app.MENU_UPDATE, app.MENU_DOCTOR):
+def test_during_a_recording_the_three_long_entries_are_locked_with_a_reason() -> None:
+    for label in (app.MENU_UPDATE, app.MENU_DOCTOR, app.MENU_SETTINGS):
         text, state = app.menu_entry(label, recording=True)
         assert state == "disabled"
         assert label in text

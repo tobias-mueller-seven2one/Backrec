@@ -60,11 +60,12 @@ UI_POLL_MS = 150
 # visible element would come out of the recording controls - which are what the
 # window is for.
 GEAR_ICON = "⚙"
-GEAR_TOOLTIP = "Menü: Aktualisieren, Diagnose, Logs öffnen, Info"
+GEAR_TOOLTIP = "Menü: Aktualisieren, Diagnose, Logs öffnen, Einstellungen öffnen, Info"
 
 MENU_UPDATE = "Aktualisieren…"
 MENU_DOCTOR = "Diagnose"
 MENU_LOGS = "Logs öffnen"
+MENU_SETTINGS = "Einstellungen öffnen"
 MENU_ABOUT = "Info"
 
 # Why an entry is greyed out has to be readable, so the reason travels in the
@@ -305,19 +306,26 @@ class RecorderApp(ctk.CTk):
         widget.bind("<Leave>", hide)
 
     def _build_menu(self) -> None:
+        """The suite-wide order, as far as a tool without a tray icon carries it.
+
+        "Einstellungen öffnen" sits between the logs and the details, which is
+        position 9 of the order in section 6 of the convention - the same place
+        the neighbouring tools give it in their tray menu.
+        """
         self._menu = tk.Menu(self, tearoff=0)
         self._menu.add_command(label=MENU_UPDATE, command=self._menu_update)
         self._menu.add_command(label=MENU_DOCTOR, command=self._menu_doctor)
         self._menu.add_command(label=MENU_LOGS, command=self._menu_logs)
+        self._menu.add_command(label=MENU_SETTINGS, command=self._menu_settings)
         self._menu.add_command(label=MENU_ABOUT, command=self._menu_about)
 
     def _open_menu(self) -> None:
-        """Opens the menu, with the two entries a recording rules out greyed out."""
+        """Opens the menu, with the entries a recording rules out greyed out."""
         if self._menu_busy or self._closing:
             log.debug("Menue ignoriert (ein Vorgang laeuft)")
             return
 
-        for index, label in ((0, MENU_UPDATE), (1, MENU_DOCTOR)):
+        for index, label in ((0, MENU_UPDATE), (1, MENU_DOCTOR), (3, MENU_SETTINGS)):
             text, state = menu_entry(label, self._recording)
             self._menu.entryconfigure(index, state=state, label=text)
 
@@ -424,6 +432,29 @@ class RecorderApp(ctk.CTk):
         result = control.open_logs()
         if not result.ok:
             log.warning("Aufzeichnungsordner liess sich nicht oeffnen: %s", " ".join(result.lines))
+
+    def _menu_settings(self) -> None:
+        """The second way to a changed setting, next to running the setup again.
+
+        In a thread of its own like every long menu action here: the window draws
+        on the main one, and the message about the restart would freeze it until
+        someone clicked the message away. Locked during a recording like the two
+        entries above it - a changed folder takes effect at the next start, and
+        the running recording would go on writing where it started.
+        """
+        log.info("Menue: %s", MENU_SETTINGS)
+        from tkinter import messagebox
+
+        def work() -> None:
+            result = control.open_settings()
+            self.after(
+                0,
+                lambda: messagebox.showinfo(
+                    f"{paths.TOOL_NAME}: Einstellungen", "\n".join(result.lines), parent=self
+                ),
+            )
+
+        self._in_background("settings", work)
 
     def _menu_about(self) -> None:
         log.info("Menue: %s", MENU_ABOUT)
