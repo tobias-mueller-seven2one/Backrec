@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "backrec"
+description = "Records microphone and system audio side by side and merges both into one file"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+# The single source is the VERSION file in the repository root: the setup has to
+# read the version before a runtime exists (design D18).
+dynamic = ["version"]
+
+# Pinned to the state that is actually installed today, not to the lower bounds
+# of the retired requirements.txt (design D2). psutil carries the creation time
+# that turns a process id into an identity; pywin32 builds the shortcut over COM
+# and raises the existing window on a second start.
+dependencies = [
+    "customtkinter==6.0.0",
+    "sounddevice==0.5.6",
+    "soundcard==0.4.6",
+    "soundfile==0.14.0",
+    "numpy==2.4.6",
+    "pycaw==20251023",
+    "psutil==7.1.3",
+    "pywin32==312",
+]
+
+[project.scripts]
+backrec = "backrec.cli:main"
+
+# GUI subsystem: uv puts an entry point into .venv\Scripts that behaves like
+# pythonw.exe. With it neither a script nor a shortcut carries a path to an
+# interpreter, a module or a configuration file.
+[project.gui-scripts]
+backrec-gui = "backrec.app:main"
+
+[dependency-groups]
+dev = ["pytest==8.4.2"]
+
+[tool.hatch.version]
+path = "VERSION"
+pattern = "^(?P<version>[0-9][^\\s]*)"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/backrec"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# The working tree wins over the installed copy: the package is installed
+# non-editable (see paths.repo_root), and a test has to check what lies here.
+pythonpath = ["src"]

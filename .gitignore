@@ -26,5 +26,21 @@ wheels/
 *~
 .DS_Store
 
-# Local environment configuration (contains machine-specific paths)
+# Local environment configuration (contains machine-specific paths).
+# Kept for existing installations; the setup migrates it once (design D3).
 .env
+
+# A filled configuration never belongs in the repository: the effective file
+# lives in %LOCALAPPDATA%\MemoSuite\Backrec\ (design D3).
+config.toml
+
+# Desktop shortcuts are built per machine and carry absolute paths (design D14).
+*.lnk
+
+# Release artefacts and the staging folder of an update (design D17, D18).
+release-manifest.json
+*.zip
+
+# uv writes the environment and its caches here.
+.uv/
+uv-receipt.json
