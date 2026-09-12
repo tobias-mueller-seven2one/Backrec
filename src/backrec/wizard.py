@@ -42,8 +42,8 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from . import paths
-from .config import ConfigError, missing_keys, read_toml
+from . import config as config_module, paths
+from .config import missing_keys, read_toml
 from .console import Assistant
 from .logging_setup import get_logger
 
@@ -483,7 +483,9 @@ def review(
 
     try:
         current = read_toml(config_file)
-    except ConfigError as exc:
+    # Through the module, not through an imported name: a name bound at import
+    # time stops matching as soon as anything reloads the module it came from.
+    except config_module.ConfigError as exc:
         logger.warning("Einstellungen nicht lesbar -- keine Uebersicht: %s", exc)
         return ReviewResult(config_path=config_file)
 

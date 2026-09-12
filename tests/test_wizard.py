@@ -6,6 +6,8 @@ import io
 import tomllib
 from pathlib import Path
 
+import pytest
+
 from backrec import config as config_module, paths, wizard
 from backrec.console import Assistant
 
@@ -324,3 +326,282 @@ def test_the_real_template_needs_no_completion_of_a_file_the_wizard_wrote(tmp_pa
 def test_the_message_names_how_many_settings_were_added():
     assert wizard.completion_message(1) == "1 neue Einstellung mit Standardwert ergänzt."
     assert wizard.completion_message(3) == "3 neue Einstellungen mit Standardwerten ergänzt."
+
+
+# --- Every setting as a question (convention section 5 step 3) ----------------
+
+
+def setting(key: str, value, description: str = "") -> wizard.Setting:
+    return wizard.Setting(
+        key=key,
+        kind=wizard.kind_of(key, value),
+        description=description,
+        choices=wizard.choices_for(key),
+        secret=wizard.is_secret(key),
+    )
+
+
+def test_the_kind_of_a_setting_comes_from_the_value_of_the_template():
+    assert wizard.kind_of("aktiv", True) is wizard.Kind.BOOL
+    assert wizard.kind_of("anzahl", 5) is wizard.Kind.NUMBER
+    assert wizard.kind_of("liste", ["a", "b"]) is wizard.Kind.LIST
+    assert wizard.kind_of("log_level", "INFO") is wizard.Kind.CHOICE
+    assert wizard.kind_of("target_dir", "C:\\A") is wizard.Kind.PATH
+    assert wizard.kind_of("name", "Backrec") is wizard.Kind.TEXT
+
+
+def test_a_yes_or_no_answer_is_read_as_such():
+    entry = setting("aktiv", True)
+
+    assert wizard.parse_answer(entry, "ja", True) is True
+    assert wizard.parse_answer(entry, "nein", True) is False
+
+
+def test_a_word_where_a_yes_belongs_is_refused_in_plain_language():
+    entry = setting("aktiv", True)
+
+    with pytest.raises(ValueError, match="ja oder nein"):
+        wizard.parse_answer(entry, "vielleicht", True)
+
+
+def test_a_whole_number_stays_a_whole_number():
+    entry = setting("anzahl", 5)
+
+    assert wizard.parse_answer(entry, "7", 5) == 7
+    assert wizard.parse_answer(entry, "2,5", 5.0) == 2.5
+
+
+def test_a_word_where_a_number_belongs_is_refused():
+    entry = setting("anzahl", 5)
+
+    with pytest.raises(ValueError, match="Zahl"):
+        wizard.parse_answer(entry, "viele", 5)
+
+
+def test_a_negative_number_is_refused():
+    entry = setting("anzahl", 5)
+
+    with pytest.raises(ValueError, match="ab 0"):
+        wizard.parse_answer(entry, "-1", 5)
+
+
+def test_a_list_is_split_at_the_commas():
+    entry = setting("liste", ["a"])
+
+    assert wizard.parse_answer(entry, "a, b ,c", ["a"]) == ["a", "b", "c"]
+
+
+def test_an_empty_list_is_refused():
+    entry = setting("liste", ["a"])
+
+    with pytest.raises(ValueError, match="mindestens einen Eintrag"):
+        wizard.parse_answer(entry, " , ", ["a"])
+
+
+def test_a_value_outside_the_permitted_ones_is_refused_with_the_permitted_ones():
+    entry = setting("log_level", "INFO")
+
+    with pytest.raises(ValueError, match="DEBUG"):
+        wizard.parse_answer(entry, "LAUT", "INFO")
+
+
+def test_a_permitted_value_is_taken():
+    entry = setting("log_level", "INFO")
+
+    assert wizard.parse_answer(entry, "DEBUG", "INFO") == "DEBUG"
+
+
+def test_a_folder_answer_is_expanded(monkeypatch, tmp_path):
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "Profil"))
+    entry = setting("target_dir", "X")
+
+    assert wizard.parse_answer(entry, "%USERPROFILE%\\Ziel", "X") == str(
+        tmp_path / "Profil" / "Ziel"
+    )
+
+
+def test_an_empty_folder_answer_is_refused():
+    entry = setting("target_dir", "X")
+
+    with pytest.raises(ValueError, match="Ordner"):
+        wizard.parse_answer(entry, "   ", "X")
+
+
+def test_a_secret_never_appears_in_the_overview():
+    entry = setting("api_key", "")
+
+    assert entry.secret
+    assert wizard.overview_lines([entry], {"api_key": "abc123"}) == ["api_key: gesetzt"]
+    assert wizard.overview_lines([entry], {}) == ["api_key: nicht gesetzt"]
+
+
+def test_the_overview_shows_every_other_value_as_it_is():
+    entries = [setting("log_level", "INFO"), setting("aktiv", True)]
+
+    assert wizard.overview_lines(entries, {"log_level": "DEBUG", "aktiv": False}) == [
+        "log_level: DEBUG",
+        "aktiv: nein",
+    ]
+
+
+def test_the_meaning_of_a_setting_is_one_sentence_from_the_template():
+    comments = wizard.template_comments(repo=REPO)
+
+    assert wizard.first_sentence(comments["log_level"]).endswith(".")
+    assert len(wizard.first_sentence(comments["recording_dir"])) <= 101
+
+
+def test_the_first_run_leaves_out_the_two_derived_folders(tmp_path):
+    template = template_file(tmp_path)
+
+    keys = [entry.key for entry in wizard.settings_from_template(template)]
+
+    assert keys == ["log_level"]
+
+
+def test_a_later_run_does_include_the_two_folders(tmp_path):
+    template = template_file(tmp_path)
+
+    keys = [
+        entry.key for entry in wizard.settings_from_template(template, include_directories=True)
+    ]
+
+    assert keys == ["recording_dir", "target_dir", "log_level"]
+
+
+def test_the_first_run_offers_the_remaining_settings(tmp_path, monkeypatch):
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "Profil"))
+    # Accept the base folder, confirm both folders, accept the offer, answer the
+    # one remaining setting, decline the shared file.
+    assistant, _stream = make(answers=["", "", "j", "DEBUG", "n"])
+
+    result = wizard.run(
+        assistant, tmp_path / "config.toml", handshake_path=tmp_path / "suite.toml", repo=REPO
+    )
+
+    assert result.values["log_level"] == "DEBUG"
+    assert "log_level = 'DEBUG'" in result.config_path.read_text(encoding="utf-8")
+
+
+def test_declining_the_offer_leaves_the_values_of_the_template(tmp_path, monkeypatch):
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "Profil"))
+    assistant, _stream = make(answers=["", "", "n", "n"])
+
+    result = wizard.run(
+        assistant, tmp_path / "config.toml", handshake_path=tmp_path / "suite.toml", repo=REPO
+    )
+
+    assert "log_level" not in result.values
+    assert "log_level = 'INFO'" in result.config_path.read_text(encoding="utf-8")
+
+
+def test_an_unattended_first_run_asks_nothing_at_all(tmp_path, monkeypatch):
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "Profil"))
+    assistant, stream = make()
+
+    wizard.run(
+        assistant,
+        tmp_path / "config.toml",
+        unattended=True,
+        handshake_path=tmp_path / "suite.toml",
+        repo=REPO,
+    )
+
+    assert "Weitere Einstellungen" not in stream.getvalue()
+
+
+# --- A later run: overview and change -----------------------------------------
+
+
+def written(tmp_path: Path, level: str = "INFO") -> Path:
+    config = tmp_path / "config.toml"
+    config.write_text(
+        f"recording_dir = 'C:\\A'\ntarget_dir = 'C:\\B'\nlog_level = '{level}'\n",
+        encoding="utf-8",
+    )
+    return config
+
+
+def test_a_later_run_shows_what_is_set(tmp_path):
+    config = written(tmp_path)
+    assistant, stream = make(answers=["n"])
+
+    wizard.review(assistant, config, repo=REPO)
+
+    printed = stream.getvalue()
+    assert "Die Einstellungen sind gerade so:" in printed
+    assert "log_level: INFO" in printed
+    assert "recording_dir: C:\\A" in printed
+
+
+def test_pressing_enter_changes_nothing(tmp_path):
+    config = written(tmp_path)
+    before = config.read_text(encoding="utf-8")
+    assistant, _stream = make(answers=[""])
+
+    result = wizard.review(assistant, config, repo=REPO)
+
+    assert result.changed == ()
+    assert config.read_text(encoding="utf-8") == before
+
+
+def test_a_later_run_changes_the_value_that_was_answered(tmp_path):
+    config = written(tmp_path)
+    # Change settings, keep both folders, then a new level.
+    assistant, _stream = make(answers=["j", "", "", "ERROR"])
+
+    result = wizard.review(assistant, config, repo=REPO)
+
+    assert result.changed == ("log_level",)
+    assert "log_level = 'ERROR'" in config.read_text(encoding="utf-8")
+    assert "recording_dir = 'C:\\A'" in config.read_text(encoding="utf-8")
+
+
+def test_a_change_keeps_every_comment_of_the_file(tmp_path):
+    config = tmp_path / "config.toml"
+    config.write_text(
+        "# Wohin aufgenommen wird.\nrecording_dir = 'C:\\A'\n"
+        "target_dir = 'C:\\B'\nlog_level = 'INFO'\n",
+        encoding="utf-8",
+    )
+    assistant, _stream = make(answers=["j", "", "", "ERROR"])
+
+    wizard.review(assistant, config, repo=REPO)
+
+    assert "# Wohin aufgenommen wird." in config.read_text(encoding="utf-8")
+
+
+def test_three_wrong_answers_leave_the_previous_value(tmp_path):
+    config = written(tmp_path)
+    assistant, stream = make(answers=["j", "", "", "laut", "lauter", "am lautesten"])
+
+    result = wizard.review(assistant, config, repo=REPO)
+
+    assert result.changed == ()
+    assert "Der bisherige Wert bleibt stehen." in stream.getvalue()
+    assert "log_level = 'INFO'" in config.read_text(encoding="utf-8")
+
+
+def test_an_unattended_later_run_shows_nothing_and_asks_nothing(tmp_path):
+    config = written(tmp_path)
+    assistant, stream = make()
+
+    result = wizard.review(assistant, config, unattended=True, repo=REPO)
+
+    assert result.changed == ()
+    assert stream.getvalue() == ""
+
+
+def test_settings_that_cannot_be_read_are_no_reason_to_stop(tmp_path):
+    config = tmp_path / "config.toml"
+    config.write_text("kein = = gueltiges", encoding="utf-8")
+    assistant, _stream = make(answers=["j"])
+
+    result = wizard.review(assistant, config, repo=REPO)
+
+    assert result.changed == ()
+
+
+def test_the_message_names_how_many_settings_were_changed():
+    assert wizard.change_message(1) == "1 Einstellung geändert."
+    assert wizard.change_message(2) == "2 Einstellungen geändert."
