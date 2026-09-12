@@ -570,3 +570,52 @@ def test_no_folder_is_opened_through_an_explorer_command() -> None:
     offenders = [path.name for path in sources if _EXPLORER_CALL.search(path.read_text(encoding="utf-8"))]
 
     assert offenders == [], "Ordner werden mit os.startfile geöffnet, nie über eine Explorer-Kommandozeile"
+
+
+# --- The settings: the second way to change one -------------------------------
+
+
+def test_settings_that_do_not_exist_yet_point_at_the_setup(tmp_path: Path) -> None:
+    """Two lines, the shape every failure here takes: what happened, what to do."""
+    result = control.open_settings(tmp_path / "gibt-es-nicht.toml")
+
+    assert not result.ok
+    assert result.code == 1
+    assert len(result.lines) == 2
+    assert result.lines[0].startswith("Was ist passiert")
+    assert result.lines[1].startswith("Was tun")
+    assert "Setup.cmd" in result.lines[1]
+
+
+def test_the_settings_are_opened_with_the_program_of_the_system(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config = tmp_path / "config.toml"
+    config.write_text("device = 'X'\n", encoding="utf-8")
+    opened: list[str] = []
+    monkeypatch.setattr(control.os, "startfile", opened.append, raising=False)
+    monkeypatch.setattr(control.os, "name", "nt")
+
+    result = control.open_settings(config)
+
+    assert result.ok
+    assert opened == [str(config)]
+    assert str(config) in result.lines[0]
+    assert control.SETTINGS_RESTART_HINT in result.lines
+
+
+def test_settings_that_do_not_open_still_name_their_place(tmp_path: Path, monkeypatch) -> None:
+    """No editor is no reason to end the window that asked - the path is the answer."""
+    config = tmp_path / "config.toml"
+    config.write_text("device = 'X'\n", encoding="utf-8")
+
+    def refuse(_target: str) -> None:
+        raise OSError("kein Editor")
+
+    monkeypatch.setattr(control.os, "startfile", refuse, raising=False)
+    monkeypatch.setattr(control.os, "name", "nt")
+
+    result = control.open_settings(config)
+
+    assert not result.ok
+    assert any(str(config) in line for line in result.lines)

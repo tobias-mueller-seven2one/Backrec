@@ -98,6 +98,42 @@ def test_the_settings_sit_at_position_nine_of_the_suite_order(window) -> None:
     assert labels.index(app.MENU_ABOUT) == labels.index(app.MENU_SETTINGS) + 1
 
 
+# --- The settings entry ---------------------------------------------------------
+
+
+class Gear:
+    """Only what `_menu_settings` touches - the route to the control surface is under test."""
+
+    def __init__(self) -> None:
+        self.label: str | None = None
+        self.scheduled: list[object] = []
+
+    def _in_background(self, label: str, work) -> None:
+        self.label = label
+        work()
+
+    def after(self, _delay, callback) -> None:
+        self.scheduled.append(callback)
+
+
+def test_the_menu_entry_opens_the_settings_through_the_control_surface(monkeypatch) -> None:
+    """The window knows no editor of its own - it asks `control.open_settings`."""
+    calls: list[tuple[tuple, dict]] = []
+
+    def record(*args, **kwargs):
+        calls.append((args, kwargs))
+        return app.control.CommandResult(ok=True, lines=("Einstellungen: C:\\config.toml",))
+
+    monkeypatch.setattr(app.control, "open_settings", record)
+    stub = Gear()
+
+    app.RecorderApp._menu_settings(stub)
+
+    assert calls == [((), {})]
+    assert stub.label == "settings"
+    assert len(stub.scheduled) == 1
+
+
 # --- Menu state ---------------------------------------------------------------
 
 
