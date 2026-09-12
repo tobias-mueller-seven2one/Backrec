@@ -1178,4 +1178,10 @@ def about_lines(repo: Path | None = None, config_path: Path | None = None) -> tu
         "",
         "Entfernen:",
         *UNINSTALL_SENTENCES,
+        # The three sentences above are the guide's, word for word, and they end
+        # at the folder. What they cannot say without growing a fourth line is
+        # that anything personal survives it - and this is the one place that
+        # has room for the sentence.
+        f"Deine Einstellungen, Aufzeichnungen und der Zustand bleiben unter "
+        f"{paths.tool_home()} liegen und lassen sich dort getrennt löschen.",
     )

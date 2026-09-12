@@ -424,6 +424,16 @@ def test_about_names_version_folder_settings_guide_and_removal(tmp_path: Path) -
         assert sentence in joined
 
 
+def test_about_says_what_survives_the_deleted_folder(tmp_path: Path) -> None:
+    """Three sentences that end at the folder leave the rest unsaid."""
+    repo = _installed_repo(tmp_path)
+
+    joined = "\n".join(control.about_lines(repo))
+
+    assert str(paths.tool_home()) in joined
+    assert "getrennt löschen" in joined
+
+
 def test_the_removal_sentences_are_the_ones_from_the_guide() -> None:
     """The same text in two places that cannot reach each other."""
     guide = paths.guide_path().read_bytes()[3:].decode("utf-8")
