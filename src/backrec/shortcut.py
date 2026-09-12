@@ -81,13 +81,27 @@ class ShortcutStatus:
     readable: bool = False
     belongs_here: bool = False
     target_exists: bool = False
+    target_current: bool = False
     contents: dict[str, str] = field(default_factory=dict)
     notes: tuple[str, ...] = ()
 
     @property
     def installed(self) -> bool:
-        """Present, readable, ours, and pointing at something that is there."""
-        return self.exists and self.readable and self.belongs_here and self.target_exists
+        """Present, readable, ours, pointing at something that is there - and current.
+
+        `target_current` is not pedantry. A shortcut left over from the retired
+        `Start_Recorder.bat` satisfies every other condition: it lies on the
+        desktop, it is readable, its working directory is this folder and its
+        target exists. The setup would report it as done and leave the colleague
+        with an icon that from now on only prints a notice (design D11).
+        """
+        return (
+            self.exists
+            and self.readable
+            and self.belongs_here
+            and self.target_exists
+            and self.target_current
+        )
 
 
 @dataclass(frozen=True)
@@ -291,6 +305,9 @@ def status(
     belongs = points_at_repo(contents, root)
     target = contents.get("target") or ""
     target_exists = bool(target) and Path(target).is_file()
+    target_current = bool(target) and os.path.normcase(target) == os.path.normcase(
+        str(launcher(root))
+    )
 
     notes = [
         f"Verknüpfung: {link}",
@@ -302,6 +319,8 @@ def status(
         notes.append(f"Diese Verknüpfung gehört zu einer anderen Installation, nicht zu {root}.")
     elif not target_exists:
         notes.append("Das Ziel der Verknüpfung gibt es nicht mehr -- sie muss neu aufgebaut werden.")
+    elif not target_current:
+        notes.append("Diese Verknüpfung nimmt noch den abgelösten Startweg -- sie gehört neu aufgebaut.")
 
     return ShortcutStatus(
         path=link,
@@ -309,6 +328,7 @@ def status(
         readable=True,
         belongs_here=belongs,
         target_exists=target_exists,
+        target_current=target_current,
         contents=contents,
         notes=tuple(notes),
     )

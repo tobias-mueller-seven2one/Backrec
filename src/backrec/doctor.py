@@ -527,6 +527,18 @@ def _shortcut_checks(facts: Observations) -> list[Check]:
             )
         ]
 
+    if not state.target_current:
+        return [
+            Check(
+                "shortcut.entry",
+                CATEGORY_SHORTCUT,
+                "Verknüpfung auf dem Desktop",
+                Level.WARN,
+                f"{state.path} nimmt noch den abgelösten Startweg",
+                "Setup.cmd doppelklicken, um sie neu aufzubauen.",
+            )
+        ]
+
     return [
         Check(
             "shortcut.entry",

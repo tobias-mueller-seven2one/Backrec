@@ -270,6 +270,105 @@ def test_a_broken_archive_changes_nothing(tmp_path: Path) -> None:
     assert not (repo.with_name(repo.name + ".update")).exists()
 
 
+def _archive(tmp_path: Path, version: str = "2026.10.1") -> Path:
+    import hashlib
+    import json
+    import zipfile
+
+    from backrec import release
+
+    content = "neu"
+    target = tmp_path / f"Backrec-{version}.zip"
+    with zipfile.ZipFile(target, "w") as bundle:
+        bundle.writestr("Backrec/README.md", content)
+        bundle.writestr(
+            f"Backrec/{release.MANIFEST_NAME}",
+            json.dumps(
+                {
+                    "tool": "Backrec",
+                    "version": version,
+                    "files": [
+                        {
+                            "path": "README.md",
+                            "sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
+                            "size": len(content),
+                        }
+                    ],
+                }
+            ),
+        )
+    return target
+
+
+class FakeProcess:
+    pid = 4242
+
+    def is_running(self) -> bool:
+        return True
+
+
+def test_updating_a_running_instance_hands_over_to_the_helper_outside_the_folder(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo = _installed_repo(tmp_path)
+    (repo / "scripts" / "win").mkdir(parents=True)
+    (repo / "scripts" / "win" / "apply-update.ps1").write_text("# helfer", encoding="utf-8")
+    launched: list[list[str]] = []
+
+    monkeypatch.setattr(control.instance, "running_instance", lambda **_k: FakeProcess())
+    monkeypatch.setattr(control.subprocess, "Popen", lambda command, **_k: launched.append(command))
+
+    result = control.apply_archive(_archive(tmp_path), repo)
+
+    assert result.ok
+    assert launched
+    assert launched[0][0] == "powershell.exe"
+    assert "-File" in launched[0]
+    assert str(repo / "scripts" / "win" / "apply-update.ps1") in launched[0]
+    assert str(FakeProcess.pid) in launched[0]
+
+
+def test_updating_names_both_versions_before_anything_changes(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo = _installed_repo(tmp_path)
+    (repo / "scripts" / "win").mkdir(parents=True)
+    (repo / "scripts" / "win" / "apply-update.ps1").write_text("# helfer", encoding="utf-8")
+
+    monkeypatch.setattr(control.instance, "running_instance", lambda **_k: FakeProcess())
+    monkeypatch.setattr(control.subprocess, "Popen", lambda command, **_k: None)
+
+    result = control.apply_archive(_archive(tmp_path), repo)
+
+    joined = " ".join(result.lines)
+    assert "2026.09.1" in joined
+    assert "2026.10.1" in joined
+
+
+def test_a_missing_helper_leaves_the_previous_state_runnable(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo = _installed_repo(tmp_path)
+    monkeypatch.setattr(control.instance, "running_instance", lambda **_k: FakeProcess())
+
+    result = control.apply_archive(_archive(tmp_path), repo)
+
+    assert not result.ok
+    assert "Setup.cmd" in " ".join(result.lines)
+    assert (repo / ".venv" / "pyvenv.cfg").is_file()
+
+
+def test_updating_without_a_running_instance_mirrors_right_away(tmp_path: Path) -> None:
+    repo = _installed_repo(tmp_path)
+
+    result = control.apply_archive(_archive(tmp_path), repo, detached=False)
+
+    assert result.ok
+    assert (repo / "README.md").read_text(encoding="utf-8") == "neu"
+    assert not repo.with_name(repo.name + ".update").exists()
+    assert "Setup.cmd" in " ".join(result.lines)
+
+
 # --- About --------------------------------------------------------------------
 
 

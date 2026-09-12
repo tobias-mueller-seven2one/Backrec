@@ -54,6 +54,7 @@ def facts(**overrides) -> doctor.Observations:
             readable=True,
             belongs_here=True,
             target_exists=True,
+            target_current=True,
         ),
         logs_dir=Path(r"C:\logs"),
         logs_exists=True,
@@ -321,6 +322,21 @@ def test_a_shortcut_whose_target_is_gone_is_a_failure() -> None:
     check = find(doctor.evaluate(facts(shortcut=dangling)), "shortcut.entry")
 
     assert check.level is doctor.Level.FAIL
+
+
+def test_a_shortcut_on_the_retired_start_route_is_a_warning() -> None:
+    outdated = shortcut_module.ShortcutStatus(
+        path=Path(r"C:\Desktop\Backrec.lnk"),
+        exists=True,
+        readable=True,
+        belongs_here=True,
+        target_exists=True,
+        target_current=False,
+    )
+    check = find(doctor.evaluate(facts(shortcut=outdated)), "shortcut.entry")
+
+    assert check.level is doctor.Level.WARN
+    assert "abgelösten Startweg" in check.cause
 
 
 def test_an_orphaned_record_is_a_warning_and_nothing_is_tidied() -> None:

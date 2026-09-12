@@ -308,10 +308,16 @@ def window_handles_of(pid: int) -> list[int]:
 def raise_window(pid: int) -> bool:
     """Brings the window of `pid` to the front. Says whether that worked.
 
-    Windows refuses the foreground change under conditions this process cannot
-    influence (design D6). A refusal is not an error here: the second start
-    then reports that the application is already running, and the exit code is
-    the same either way.
+    Three steps, and success is measured on the first two. `SetForegroundWindow`
+    is refused whenever the calling process is not the foreground one - which is
+    the normal case here, because the caller is a shortcut that has just been
+    double-clicked (design D6). Measured on that call alone the answer would
+    almost always be "no", and a dialog would appear in front of a window that
+    is demonstrably visible: the window is always-on-top, so restoring it and
+    bringing it to the top of its band is what the user actually sees happen.
+
+    Only when not even that works - no window found, or every call refused - is
+    the answer no, and the second start says so in a message instead.
     """
     handles = window_handles_of(pid)
     if not handles:
@@ -327,10 +333,20 @@ def raise_window(pid: int) -> bool:
         try:
             if win32gui.IsIconic(handle):
                 win32gui.ShowWindow(handle, win32con.SW_RESTORE)
+            win32gui.BringWindowToTop(handle)
+        except Exception as exc:  # noqa: BLE001 - a window may vanish mid-call
+            logger.info("Fenster %d liess sich nicht hervorholen: %s", handle, exc)
+            continue
+
+        try:
             win32gui.SetForegroundWindow(handle)
         except Exception as exc:  # noqa: BLE001 - see docstring
-            logger.info("Fenster %d liess sich nicht nach vorn holen: %s", handle, exc)
-            continue
+            logger.info(
+                "Windows hat den Wechsel in den Vordergrund abgelehnt (%s) -- "
+                "das Fenster steht trotzdem oben",
+                exc,
+            )
+
         logger.info("Bestehendes Fenster der Anwendung %d nach vorn geholt", pid)
         return True
 

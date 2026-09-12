@@ -154,6 +154,31 @@ def test_status_reports_an_unreadable_link_as_present(tmp_path: Path) -> None:
     assert "nicht lesen" in " ".join(result.notes)
 
 
+def test_a_link_of_the_retired_start_route_does_not_count_as_installed(tmp_path: Path) -> None:
+    """The old `Start_Recorder.bat` icon satisfies every other condition."""
+    repo = _installed_repo(tmp_path)
+    desktop = tmp_path / "Desktop"
+    desktop.mkdir()
+    (repo / "Start_Recorder.bat").write_text("@echo off", encoding="utf-8")
+
+    fake = FakeDesktop()
+    fake.written[desktop / shortcut.SHORTCUT_NAME] = shortcut.ShortcutSpec(
+        target=str(repo / "Start_Recorder.bat"),
+        arguments="",
+        workdir=str(repo),
+        description="alt",
+    )
+    (desktop / shortcut.SHORTCUT_NAME).write_text("lnk", encoding="utf-8")
+
+    result = shortcut.status(repo, desktop, reader=fake.read)
+
+    assert result.belongs_here
+    assert result.target_exists
+    assert not result.target_current
+    assert not result.installed
+    assert "abgelösten Startweg" in " ".join(result.notes)
+
+
 def test_status_reports_a_target_that_no_longer_exists(tmp_path: Path) -> None:
     repo = _installed_repo(tmp_path)
     desktop = tmp_path / "Desktop"
