@@ -2,19 +2,16 @@
 
 The recording core itself has no coverage on purpose - it needs real devices
 (design, Non-Goals). What is checked here is everything around it: the geometry
-the window defends, the menu, and the two ways out that must never lose a
-recording.
+the window defends, the click on the status line that is the only route out of
+the window, and the two ways out that must never lose a recording.
 """
 
 from __future__ import annotations
-
-from pathlib import Path
 
 import pytest
 
 from backrec import app, instance
 from backrec.delivery import Outcome
-from backrec.update import ArchiveInfo, UpdatePlan
 
 
 @pytest.fixture(scope="module")
@@ -54,133 +51,145 @@ def test_the_window_keeps_its_width(window) -> None:
     assert window._fixed_size == (app.WINDOW_WIDTH, window.winfo_height())
 
 
-def test_the_gear_displaces_no_recording_control(window) -> None:
-    assert window.menu_button.winfo_ismapped()
+def test_the_window_carries_no_menu_button(window) -> None:
+    """The gear is gone, and nothing took its place (design D25)."""
+    assert not hasattr(window, "menu_button")
+    assert not hasattr(window, "_menu")
+
+
+def test_every_recording_control_is_on_screen(window) -> None:
+    assert window.status_label.winfo_ismapped()
     assert window.btn_start.winfo_ismapped()
     assert window.btn_stop.winfo_ismapped()
     assert window.btn_discard.winfo_ismapped()
 
 
-def test_the_gear_shows_and_hides_its_hover_text(window) -> None:
-    """A gear without a label is not self-explanatory - and an untried tooltip
-    is a second window that only fails in front of the user."""
-    # On the canvas, not on the button: CustomTkinter forwards `bind` to the
-    # canvas and the text label, and a real mouse enters those, not the frame
-    # around them.
-    canvas = window.menu_button._canvas
+def test_the_status_line_shows_and_hides_its_hover_text(window) -> None:
+    """A clickable line is not self-explanatory - and an untried tooltip is a
+    second window that would only fail in front of the user."""
+    # On the inner label, not on the frame: CustomTkinter forwards `bind` to the
+    # canvas and the text label, and a real mouse enters those.
+    label = window.status_label._label
 
-    canvas.event_generate("<Enter>")
+    label.event_generate("<Enter>")
     window.update()
     assert window._tooltip is not None
 
-    canvas.event_generate("<Leave>")
+    label.event_generate("<Leave>")
     window.update()
     assert window._tooltip is None
 
 
-def test_the_menu_carries_the_five_entries(window) -> None:
-    labels = [window._menu.entrycget(index, "label") for index in range(5)]
-
-    assert labels == [
-        app.MENU_UPDATE,
-        app.MENU_DOCTOR,
-        app.MENU_LOGS,
-        app.MENU_SETTINGS,
-        app.MENU_ABOUT,
-    ]
+def test_the_hover_text_says_what_a_click_does() -> None:
+    assert "Diagnose" in app.STATUS_TOOLTIP
 
 
-def test_the_settings_sit_at_position_nine_of_the_suite_order(window) -> None:
-    """After the logs, before the details - as in the tray of the neighbours."""
-    labels = [window._menu.entrycget(index, "label") for index in range(5)]
-
-    assert labels.index(app.MENU_SETTINGS) == labels.index(app.MENU_LOGS) + 1
-    assert labels.index(app.MENU_ABOUT) == labels.index(app.MENU_SETTINGS) + 1
+# --- The click on the status line ---------------------------------------------
 
 
-# --- The settings entry ---------------------------------------------------------
+class Clicked:
+    """Only what `_open_diagnosis` touches - the route to the control surface is under test."""
+
+    def __init__(self, *, running: bool = False, closing: bool = False) -> None:
+        self._diagnosis_running = running
+        self._closing = closing
 
 
-class Gear:
-    """Only what `_menu_settings` touches - the route to the control surface is under test."""
+def _immediate_thread(monkeypatch) -> list[object]:
+    started: list[object] = []
 
-    def __init__(self) -> None:
-        self.label: str | None = None
-        self.scheduled: list[object] = []
+    class ImmediateThread:
+        def __init__(self, target=None, daemon=False) -> None:
+            self.target = target
 
-    def _in_background(self, label: str, work) -> None:
-        self.label = label
-        work()
+        def start(self) -> None:
+            started.append(self)
+            self.target()
 
-    def after(self, _delay, callback) -> None:
-        self.scheduled.append(callback)
+    monkeypatch.setattr(app.threading, "Thread", ImmediateThread)
+    return started
 
 
-def test_the_menu_entry_opens_the_settings_through_the_control_surface(monkeypatch) -> None:
-    """The window knows no editor of its own - it asks `control.open_settings`."""
+def test_a_click_asks_the_control_surface_for_a_report(monkeypatch) -> None:
+    """The window knows no checks of its own - it asks `control.run_doctor`."""
     calls: list[tuple[tuple, dict]] = []
 
-    def record(*args, **kwargs):
-        calls.append((args, kwargs))
-        return app.control.CommandResult(ok=True, lines=("Einstellungen: C:\\config.toml",))
-
-    monkeypatch.setattr(app.control, "open_settings", record)
-    stub = Gear()
-
-    app.RecorderApp._menu_settings(stub)
-
-    assert calls == [((), {})]
-    assert stub.label == "settings"
-    assert len(stub.scheduled) == 1
-
-
-# --- Menu state ---------------------------------------------------------------
-
-
-def test_without_a_recording_every_entry_can_be_chosen() -> None:
-    assert app.menu_entry(app.MENU_DOCTOR, recording=False) == (app.MENU_DOCTOR, "normal")
-    assert app.menu_entry(app.MENU_SETTINGS, recording=False) == (app.MENU_SETTINGS, "normal")
-
-
-def test_during_a_recording_the_three_long_entries_are_locked_with_a_reason() -> None:
-    for label in (app.MENU_UPDATE, app.MENU_DOCTOR, app.MENU_SETTINGS):
-        text, state = app.menu_entry(label, recording=True)
-        assert state == "disabled"
-        assert label in text
-        assert "Aufnahme" in text
-
-
-# --- The question before an update --------------------------------------------
-
-
-def _plan(version: str, installed: str, *, newer: bool) -> UpdatePlan:
-    return UpdatePlan(
-        info=ArchiveInfo(
-            archive=Path("Backrec.zip"),
-            tool="Backrec",
-            version=version,
-            top_level="Backrec",
-            entries=(),
-        ),
-        installed_version=installed,
-        newer=newer,
-        same=version == installed,
+    monkeypatch.setattr(
+        app.control, "run_doctor", lambda *args, **kwargs: calls.append((args, kwargs))
     )
+    started = _immediate_thread(monkeypatch)
+    stub = Clicked()
+
+    app.RecorderApp._open_diagnosis(stub)
+
+    assert calls == [((), {"report": True, "open_report": True})]
+    assert len(started) == 1, "in einem eigenen Faden, nie im Aufnahmefaden"
 
 
-def test_the_question_before_an_update_names_both_versions() -> None:
-    text = app.update_question(_plan("2026.10.1", "2026.09.1", newer=True))
+def test_a_second_click_during_the_first_run_does_nothing(monkeypatch) -> None:
+    calls: list[object] = []
 
-    assert "2026.09.1" in text
-    assert "2026.10.1" in text
+    monkeypatch.setattr(app.control, "run_doctor", lambda **_kwargs: calls.append(True))
+    _immediate_thread(monkeypatch)
+
+    app.RecorderApp._open_diagnosis(Clicked(running=True))
+
+    assert calls == []
 
 
-def test_an_archive_that_is_not_newer_says_so_before_anything_happens() -> None:
-    text = app.update_question(_plan("2026.08.1", "2026.09.1", newer=False))
+def test_a_click_while_the_window_is_closing_does_nothing(monkeypatch) -> None:
+    calls: list[object] = []
 
-    assert "nicht neuer" in text
-    assert "2026.09.1" in text
-    assert "2026.08.1" in text
+    monkeypatch.setattr(app.control, "run_doctor", lambda **_kwargs: calls.append(True))
+    _immediate_thread(monkeypatch)
+
+    app.RecorderApp._open_diagnosis(Clicked(closing=True))
+
+    assert calls == []
+
+
+def test_a_failed_diagnosis_never_ends_the_window(monkeypatch) -> None:
+    def boom(**_kwargs):
+        raise RuntimeError("kaputt")
+
+    monkeypatch.setattr(app.control, "run_doctor", boom)
+    _immediate_thread(monkeypatch)
+    stub = Clicked()
+
+    app.RecorderApp._open_diagnosis(stub)
+
+    assert stub._diagnosis_running is False, "der Riegel faellt auch nach einem Fehler"
+
+
+def test_a_click_leaves_the_status_line_untouched(window, monkeypatch) -> None:
+    """The line is the only place that says "recording" in red (design D26)."""
+    monkeypatch.setattr(app.control, "run_doctor", lambda **_kwargs: None)
+    _immediate_thread(monkeypatch)
+    window._recording = True
+    window._refresh_status()
+    before = window.status_label.cget("text")
+
+    window._open_diagnosis()
+    window.update()
+
+    assert window.status_label.cget("text") == before
+    window._recording = False
+    window._refresh_status()
+
+
+def test_the_click_is_allowed_during_a_recording(window, monkeypatch) -> None:
+    """The diagnosis only reads, and a recording going wrong is when it is
+    needed most (design D27)."""
+    calls: list[object] = []
+
+    monkeypatch.setattr(app.control, "run_doctor", lambda **_kwargs: calls.append(True))
+    _immediate_thread(monkeypatch)
+    window._recording = True
+
+    window._open_diagnosis()
+
+    assert calls == [True]
+    window._recording = False
 
 
 # --- Ending -------------------------------------------------------------------

@@ -31,8 +31,8 @@ from typing import Callable, Sequence, TextIO
 # boundaries so that German words which merely contain one of them ("Blockade",
 # "Verzeichnis") do not trip the check.
 #
-# Not on the list, with reason: "log"/"logs", because "Logs oeffnen" is the menu
-# wording section 6 of the convention prescribes, and "Archiv", because the
+# Not on the list, with reason: "log"/"logs", because the wording section 6 of
+# the convention prescribes for the log folder uses it, and "Archiv", because the
 # guide names the release bundle that way - a word a colleague knows.
 FORBIDDEN_TERMS: tuple[str, ...] = (
     "venv",

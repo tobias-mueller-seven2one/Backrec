@@ -1,11 +1,10 @@
 """The control surface: every command once, as a function with one result.
 
-Command line and window menu are two faces of the same functions (design D9).
-Every decision comes back as a dataclass; `cli.py` turns it into console text
-and a return value, `app.py` into a dialog or a status line. No decision logic
-in the presentation, no output in the core - which is why the window menu needs
-no procedure of its own and can never drift away from the command of the same
-name.
+Command line and window are two faces of the same functions (design D9). Every
+decision comes back as a dataclass; `cli.py` turns it into console text and a
+return value, `app.py` into a dialog or a status line. No decision logic in the
+presentation, no output in the core - which is why the window needs no procedure
+of its own and can never drift away from the command of the same name.
 """
 
 from __future__ import annotations
@@ -665,8 +664,8 @@ def _closing_note(everything_ok: bool, config_path: Path | None = None) -> str:
     """
     if everything_ok:
         head = (
-            "Fertig. Das Symbol liegt auf dem Desktop. Im Fenster öffnet das Zahnrad "
-            "oben rechts das Menü mit Diagnose, Aktualisieren und Auskunft."
+            "Fertig. Das Symbol liegt auf dem Desktop. Im Fenster öffnet ein Klick "
+            "auf die Statuszeile die Diagnose."
         )
     else:
         head = "Noch nicht fertig. Ein zweiter Lauf nach dem Beheben zerstört nichts."
@@ -982,7 +981,7 @@ def run_doctor(
     report: bool = False,
     open_report: bool = False,
 ) -> DoctorReport:
-    """The diagnosis as one result, for the command line and for the menu."""
+    """The diagnosis as one result, for the command line and for the window."""
     root = repo or paths.repo_root()
     checks = doctor.run(config_path, root)
 
@@ -1375,7 +1374,7 @@ def build_release(repo: Path | None = None, output_dir: Path | None = None) -> C
 
 
 def about_lines(repo: Path | None = None, config_path: Path | None = None) -> tuple[str, ...]:
-    """The tool details - for the menu entry and for the command line.
+    """The tool details, as the `about` command reports them.
 
     The path of the guide is in here because a colleague who has been starting
     the tool from its desktop icon for months no longer has the unpacked folder

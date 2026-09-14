@@ -19,7 +19,6 @@ import tkinter as tk
 from datetime import datetime
 from pathlib import Path
 from types import TracebackType
-from typing import Callable
 
 import customtkinter as ctk
 
@@ -28,7 +27,6 @@ from .delivery import Outcome, discard as discard_takes, finish as finish_record
 from .devices import PYCAW_AVAILABLE, get_default_comm_device_name, get_default_speaker_device_name
 from .logging_setup import bootstrap, get_logger
 from .recording import DEVICE_POLL_SEC, MicRecorder, SystemRecorder
-from .update import UpdatePlan
 
 if PYCAW_AVAILABLE:
     import comtypes
@@ -55,22 +53,11 @@ DISCARD_CONFIRM_MS = 3000
 
 UI_POLL_MS = 150
 
-# The one place for everything a tray menu would carry (design D20). A button,
-# not a menu bar: the window is 280 px wide and defends that width, and every
-# visible element would come out of the recording controls - which are what the
-# window is for.
-GEAR_ICON = "⚙"
-GEAR_TOOLTIP = "Menü: Aktualisieren, Diagnose, Logs öffnen, Einstellungen öffnen, Info"
-
-MENU_UPDATE = "Aktualisieren…"
-MENU_DOCTOR = "Diagnose"
-MENU_LOGS = "Logs öffnen"
-MENU_SETTINGS = "Einstellungen öffnen"
-MENU_ABOUT = "Info"
-
-# Why an entry is greyed out has to be readable, so the reason travels in the
-# label itself - a menu has no second line for it.
-RECORDING_SUFFIX = " (während der Aufnahme gesperrt)"
+# The one way into the diagnosis from a window that carries neither a tray icon
+# nor a menu (design D25). Not an element of its own: the status line is already
+# there, already spans the width, and anything added would come out of the
+# recording controls - which are what the window is for.
+STATUS_TOOLTIP = "Klick öffnet die Diagnose"
 
 # Long enough for the closing line to be read, short enough that a stop from
 # outside does not run into its own deadline.
@@ -84,38 +71,6 @@ def short_label(name: str, max_len: int = LABEL_MAX_LEN) -> str:
     if len(cleaned) <= max_len:
         return cleaned
     return cleaned[:max_len - 1].rstrip() + "…"
-
-
-def update_question(decision: UpdatePlan) -> str:
-    """The one question before an update, with both versions in it.
-
-    A pure function so the wording of the case that matters - an archive that is
-    not newer - is checkable without a window. The specification asks for both
-    versions in either case, and for a step older or equal to happen only with
-    explicit consent.
-    """
-    if decision.newer:
-        return (
-            f"Von {decision.installed_version} auf {decision.info.version}.\n\n"
-            "Backrec beendet sich dafür und meldet sich gleich wieder.\n\n"
-            "Jetzt einspielen?"
-        )
-    return (
-        f"Die gewählte Fassung ist nicht neuer: hier läuft "
-        f"{decision.installed_version}, gewählt ist {decision.info.version}.\n\n"
-        "Trotzdem einspielen?"
-    )
-
-
-def menu_entry(label: str, recording: bool) -> tuple[str, str]:
-    """Label and state of a menu entry a running recording rules out.
-
-    The reason travels inside the label because a menu has no second line for
-    it, and an entry that is simply grey tells the reader nothing (design D20).
-    """
-    if not recording:
-        return label, "normal"
-    return f"{label}{RECORDING_SUFFIX}", "disabled"
 
 
 def configure_appearance() -> None:
@@ -169,14 +124,12 @@ class RecorderApp(ctk.CTk):
         )
         self.status_label.pack(side="left", fill="x", expand=True)
 
-        self.menu_button = ctk.CTkButton(
-            header, text=GEAR_ICON, font=("Segoe UI", 12),
-            fg_color=BTN_IDLE, hover_color=BTN_HOVER, text_color=TEXT_MUTED,
-            border_width=0, corner_radius=4, width=24, height=20,
-            command=self._open_menu
-        )
-        self.menu_button.pack(side="right", padx=(6, 0))
-        self._install_tooltip(self.menu_button, GEAR_TOOLTIP)
+        # The status line says how things stand; a click on it says why
+        # (design D25). Same treatment as the two level rows below, which have
+        # been clickable from the start.
+        self.status_label.bind("<Button-1>", self._open_diagnosis)
+        self.status_label.configure(cursor="hand2")
+        self._install_tooltip(self.status_label, STATUS_TOOLTIP)
 
         mic_row = ctk.CTkFrame(self, fg_color="transparent")
         mic_row.pack(side="top", fill="x", padx=14, pady=(4, 0))
@@ -247,10 +200,9 @@ class RecorderApp(ctk.CTk):
         self._idle_sys_name = None
 
         self._closing = False
-        self._menu_busy = False
+        self._diagnosis_running = False
         self._silent_failures = False
         self._tooltip: ctk.CTkToplevel | None = None
-        self._build_menu()
 
         # Without this the window X kills the process and takes the daemon
         # threads with it: the closing sequence never runs and a recording in
@@ -279,10 +231,14 @@ class RecorderApp(ctk.CTk):
             exc_info=(exc_type, exc_value, traceback_object),
         )
 
-    # --- The gear menu ------------------------------------------------------
+    # --- The diagnosis ------------------------------------------------------
 
-    def _install_tooltip(self, widget: ctk.CTkButton, text: str) -> None:
-        """A gear without a label is not self-explanatory for this audience."""
+    def _install_tooltip(self, widget: ctk.CTkBaseClass, text: str) -> None:
+        """A clickable line is not self-explanatory for this audience.
+
+        The cursor shape announces that something happens on a click; this says
+        what (design D25).
+        """
 
         def show(_event: object = None) -> None:
             if self._tooltip is not None:
@@ -305,164 +261,34 @@ class RecorderApp(ctk.CTk):
         widget.bind("<Enter>", show)
         widget.bind("<Leave>", hide)
 
-    def _build_menu(self) -> None:
-        """The suite-wide order, as far as a tool without a tray icon carries it.
+    def _open_diagnosis(self, _event: object = None) -> None:
+        """The one route out of the window, on a click on the status line.
 
-        "Einstellungen öffnen" sits between the logs and the details, which is
-        position 9 of the order in section 6 of the convention - the same place
-        the neighbouring tools give it in their tray menu.
+        Allowed during a recording on purpose (design D27): the diagnosis only
+        reads, it opens no audio device, and the moment it is needed most is a
+        recording that is not going as expected.
+
+        The status line is deliberately left alone while this runs (design D26).
+        The specification asks a diagnosis to change neither state nor display,
+        and the line is the only place that says "recording" in red - overwriting
+        it as the answer to a click *on it* is exactly the wrong reply.
         """
-        self._menu = tk.Menu(self, tearoff=0)
-        self._menu.add_command(label=MENU_UPDATE, command=self._menu_update)
-        self._menu.add_command(label=MENU_DOCTOR, command=self._menu_doctor)
-        self._menu.add_command(label=MENU_LOGS, command=self._menu_logs)
-        self._menu.add_command(label=MENU_SETTINGS, command=self._menu_settings)
-        self._menu.add_command(label=MENU_ABOUT, command=self._menu_about)
-
-    def _open_menu(self) -> None:
-        """Opens the menu, with the entries a recording rules out greyed out."""
-        if self._menu_busy or self._closing:
-            log.debug("Menue ignoriert (ein Vorgang laeuft)")
+        if self._diagnosis_running or self._closing:
+            log.debug("Diagnose ignoriert (ein Vorgang laeuft)")
             return
 
-        for index, label in ((0, MENU_UPDATE), (1, MENU_DOCTOR), (3, MENU_SETTINGS)):
-            text, state = menu_entry(label, self._recording)
-            self._menu.entryconfigure(index, state=state, label=text)
-
-        try:
-            self._menu.tk_popup(
-                self.menu_button.winfo_rootx(),
-                self.menu_button.winfo_rooty() + self.menu_button.winfo_height(),
-            )
-        finally:
-            self._menu.grab_release()
-
-    def _in_background(self, label: str, work: Callable[[], None]) -> None:
-        """Runs a long menu action with the menu locked and the window talking."""
-        if self._menu_busy:
-            return
-
-        self._menu_busy = True
-        self.menu_button.configure(state="disabled")
-        previous = self.status_label.cget("text")
-        self.status_label.configure(text=label, text_color=TEXT_MUTED)
+        log.info("Statuszeile: Diagnose angefordert")
+        self._diagnosis_running = True
 
         def run() -> None:
             try:
-                work()
-            except Exception:  # noqa: BLE001 - a menu action must not end the window
-                log.error("Menuepunkt '%s' fehlgeschlagen", label, exc_info=True)
+                control.run_doctor(report=True, open_report=True)
+            except Exception:  # noqa: BLE001 - a diagnosis must not end the window
+                log.error("Diagnose fehlgeschlagen", exc_info=True)
             finally:
-                self.after(0, lambda: self._release_menu(previous))
+                self._diagnosis_running = False
 
         threading.Thread(target=run, daemon=True).start()
-
-    def _release_menu(self, previous: str) -> None:
-        self._menu_busy = False
-        self.menu_button.configure(state="normal")
-        if not self._busy:
-            self._refresh_status()
-        else:
-            self.status_label.configure(text=previous)
-
-    def _menu_update(self) -> None:
-        """Choose an archive, name both versions, ask once, then act.
-
-        The question comes before the first change, not after: the archive is
-        only read for its version here, and the expensive part - unpacking and
-        checking every file - happens once the answer is yes.
-        """
-        log.info("Menue: %s", MENU_UPDATE)
-        from tkinter import filedialog, messagebox
-
-        chosen = filedialog.askopenfilename(
-            parent=self,
-            title="Neue Fassung auswählen",
-            filetypes=[("Archiv", "*.zip")],
-        )
-        if not chosen:
-            log.info("Menue: Aktualisieren abgebrochen, keine Datei gewaehlt")
-            return
-
-        archive = Path(chosen)
-        decision, problem = control.inspect_archive(archive)
-        if decision is None:
-            messagebox.showwarning(
-                f"{paths.TOOL_NAME}: Aktualisieren", "\n".join(problem), parent=self
-            )
-            return
-
-        if not messagebox.askyesno(
-            f"{paths.TOOL_NAME}: Aktualisieren", update_question(decision), parent=self
-        ):
-            log.info(
-                "Menue: Aktualisieren abgelehnt (%s -> %s)",
-                decision.installed_version,
-                decision.info.version,
-            )
-            return
-
-        def work() -> None:
-            # `allow_older`, because the question above has just been answered
-            # for exactly this case and asking twice is asking nothing.
-            result = control.apply_archive(archive, allow_older=True)
-            self.after(
-                0,
-                lambda: messagebox.showinfo(
-                    f"{paths.TOOL_NAME}: Aktualisieren", "\n".join(result.lines), parent=self
-                ),
-            )
-            if result.ok:
-                self.after(EXIT_DELAY_MS, self._finalize_exit)
-
-        self._in_background("updating", work)
-
-    def _menu_doctor(self) -> None:
-        log.info("Menue: %s", MENU_DOCTOR)
-
-        def work() -> None:
-            # Writing and opening the report is the only effect a diagnosis has;
-            # it changes neither the state nor the display (design D21).
-            control.run_doctor(report=True, open_report=True)
-
-        self._in_background("checking", work)
-
-    def _menu_logs(self) -> None:
-        log.info("Menue: %s", MENU_LOGS)
-        result = control.open_logs()
-        if not result.ok:
-            log.warning("Aufzeichnungsordner liess sich nicht oeffnen: %s", " ".join(result.lines))
-
-    def _menu_settings(self) -> None:
-        """The second way to a changed setting, next to running the setup again.
-
-        In a thread of its own like every long menu action here: the window draws
-        on the main one, and the message about the restart would freeze it until
-        someone clicked the message away. Locked during a recording like the two
-        entries above it - a changed folder takes effect at the next start, and
-        the running recording would go on writing where it started.
-        """
-        log.info("Menue: %s", MENU_SETTINGS)
-        from tkinter import messagebox
-
-        def work() -> None:
-            result = control.open_settings()
-            self.after(
-                0,
-                lambda: messagebox.showinfo(
-                    f"{paths.TOOL_NAME}: Einstellungen", "\n".join(result.lines), parent=self
-                ),
-            )
-
-        self._in_background("settings", work)
-
-    def _menu_about(self) -> None:
-        log.info("Menue: %s", MENU_ABOUT)
-        from tkinter import messagebox
-
-        messagebox.showinfo(
-            f"{paths.TOOL_NAME}: Info", "\n".join(control.about_lines()), parent=self
-        )
 
     # --- Ending -------------------------------------------------------------
 

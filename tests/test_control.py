@@ -572,6 +572,50 @@ def test_no_folder_is_opened_through_an_explorer_command() -> None:
     assert offenders == [], "Ordner werden mit os.startfile geöffnet, nie über eine Explorer-Kommandozeile"
 
 
+# --- The diagnosis the status line asks for -----------------------------------
+
+
+def test_the_report_is_written_and_opened(tmp_path: Path, monkeypatch) -> None:
+    """The route a click on the status line takes, without an editor on the machine."""
+    repo = _installed_repo(tmp_path)
+    opened: list[str] = []
+    monkeypatch.setattr(control.doctor.os, "startfile", opened.append, raising=False)
+
+    result = control.run_doctor(repo=repo, report=True, open_report=True)
+
+    assert result.report_path is not None
+    assert result.report_path.is_file()
+    assert result.report_path.parent == paths.reports_dir()
+    assert opened == [str(result.report_path)]
+
+
+def test_a_diagnosis_without_a_report_writes_no_file(tmp_path: Path, monkeypatch) -> None:
+    """Only the route through the window asks for one (design D21)."""
+    repo = _installed_repo(tmp_path)
+    opened: list[str] = []
+    monkeypatch.setattr(control.doctor.os, "startfile", opened.append, raising=False)
+
+    result = control.run_doctor(repo=repo)
+
+    assert result.report_path is None
+    assert opened == []
+
+
+def test_a_report_that_cannot_be_opened_is_still_written(tmp_path: Path, monkeypatch) -> None:
+    """No editor is no reason to lose the file a colleague is meant to send on."""
+
+    def refuse(_target: str) -> None:
+        raise OSError("kein Editor")
+
+    repo = _installed_repo(tmp_path)
+    monkeypatch.setattr(control.doctor.os, "startfile", refuse, raising=False)
+
+    result = control.run_doctor(repo=repo, report=True, open_report=True)
+
+    assert result.report_path is not None
+    assert result.report_path.is_file()
+
+
 # --- The settings: the second way to change one -------------------------------
 
 

@@ -204,15 +204,17 @@ def test_a_failing_step_ends_the_run(calm, tmp_path, monkeypatch) -> None:
     assert "Schritt 2" not in printed
 
 
-def test_the_closing_words_name_the_start_route_and_the_menu(
+def test_the_closing_words_name_the_start_route_and_the_status_line(
     calm, tmp_path, monkeypatch
 ) -> None:
+    """Der Klick ist nicht selbsterklärend -- hier steht er zum ersten Mal."""
     desktop = Desktop(tmp_path / "Desktop")
 
     _result, printed = run_setup(calm, desktop, monkeypatch, unattended=True)
 
     assert "Desktop" in printed
-    assert "Zahnrad" in printed
+    assert "Statuszeile" in printed
+    assert "Diagnose" in printed
 
 
 def test_the_closing_words_name_the_file_and_both_ways_to_change_it(

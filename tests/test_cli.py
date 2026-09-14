@@ -141,12 +141,14 @@ def test_stop_without_a_running_instance_ends_without_error() -> None:
     assert cli.main(["stop"]) == 0
 
 
-def test_update_without_an_archive_names_both_ways(capsys) -> None:
+def test_update_without_an_archive_names_the_one_way(capsys) -> None:
+    """Weg B ist entfallen -- was bleibt, ist das Entpacken über den Ordner."""
     assert cli.main(["update"]) == 0
 
     printed = capsys.readouterr().out
     assert "Setup.cmd" in printed
-    assert "Aktualisieren" in printed
+    assert "Archiv" in printed
+    assert "Menü" not in printed and "Zahnrad" not in printed
 
 
 def test_doctor_json_is_machine_readable(capsys) -> None:

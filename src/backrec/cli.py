@@ -234,9 +234,9 @@ def _command_update(args: argparse.Namespace) -> int:
         return result.code
 
     if args.archive is None:
-        ui.note("Es gibt zwei Wege, eine neue Fassung einzuspielen:")
-        ui.note("  1. Das neue Archiv über den Ordner entpacken und Setup.cmd doppelklicken.")
-        ui.note("  2. Im Zahnrad-Menü des Fensters den Eintrag 'Aktualisieren...' wählen.")
+        ui.note("So spielst du eine neue Fassung ein:")
+        ui.note("  Das neue Archiv über den Ordner entpacken und Setup.cmd doppelklicken.")
+        ui.note("Wer es von hier aus tun will, gibt das Archiv als Angabe mit.")
         return 0
 
     result = control.apply_archive(args.archive, detached=False, allow_older=args.force)
