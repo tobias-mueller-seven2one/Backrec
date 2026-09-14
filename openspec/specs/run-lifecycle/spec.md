@@ -202,7 +202,7 @@ Es MUST ein Kommando geben, das das Protokollverzeichnis öffnet oder das Protok
 
 ### Requirement: Diagnose über die Statuszeile des Fensters
 
-Weil die Anwendung kein Symbol im Infobereich betreibt, MUST das Anwendungsfenster selbst den einen Vorgang tragen, den ein Benutzer ohne Kommandozeile daraus anstoßen können MUST: die Diagnose. Das Fenster MUST dafür kein zusätzliches Bedienelement führen, sondern MUST die ohnehin vorhandene Statuszeile anklickbar machen. Ein Klick auf die Statuszeile MUST denselben Vorgang auslösen wie das gleichnamige Kommando mit Bericht, also den Bericht schreiben und im Standardprogramm für Text öffnen. Ein Hovertext MUST sagen, was ein Klick bewirkt.
+Weil die Anwendung kein Symbol im Infobereich betreibt, MUST das Anwendungsfenster selbst den einen Vorgang tragen, den ein Benutzer ohne Kommandozeile daraus anstoßen können MUST: die Diagnose. Das Fenster MUST dafür kein zusätzliches Bedienelement führen, sondern MUST die ohnehin vorhandene Statuszeile anklickbar machen. Ein Klick auf die Statuszeile MUST denselben Vorgang auslösen wie das gleichnamige Kommando mit Bericht, also den Bericht schreiben und im Standardprogramm für Text öffnen. Die Statuszeile MUST NOT einen Hovertext oder ein anderes zusätzliches Fenster öffnen; der Zeiger in Handform ist der einzige Hinweis, den Weg beschreibt die Einstiegsanleitung.
 
 Der Vorgang MUST außerhalb des Threads laufen, der das Fenster zeichnet, und MUST NOT im Aufnahme-Thread laufen. Er MUST NOT modal sein und MUST NOT auf eine Antwort warten. Er MUST protokolliert werden. Ein zweiter Klick, während der erste Vorgang noch arbeitet, MUST wirkungslos bleiben und MUST NOT einen zweiten Bericht anstoßen. Ein Fehlschlag MUST protokolliert werden und MUST NOT das Fenster beenden.
 
@@ -217,10 +217,11 @@ Die Schaltfläche, die bisher ein Menü im Anwendungsfenster geöffnet hat, MUST
 - **AND** das Fenster bleibt währenddessen bedienbar
 - **AND** die Auswahl steht in der Protokolldatei
 
-#### Scenario: Hovertext der Statuszeile
+#### Scenario: Zeiger über der Statuszeile
 
 - **WHEN** der Zeiger über der Statuszeile steht
-- **THEN** erscheint ein Hovertext, der sagt, dass ein Klick die Diagnose öffnet
+- **THEN** nimmt der Zeiger die Handform an
+- **AND** es öffnet sich kein Hovertext und kein weiteres Fenster
 
 #### Scenario: Klick während einer Aufnahme
 

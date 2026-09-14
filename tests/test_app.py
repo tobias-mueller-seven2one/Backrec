@@ -64,24 +64,17 @@ def test_every_recording_control_is_on_screen(window) -> None:
     assert window.btn_discard.winfo_ismapped()
 
 
-def test_the_status_line_shows_and_hides_its_hover_text(window) -> None:
-    """A clickable line is not self-explanatory - and an untried tooltip is a
-    second window that would only fail in front of the user."""
-    # On the inner label, not on the frame: CustomTkinter forwards `bind` to the
-    # canvas and the text label, and a real mouse enters those.
+def test_the_status_line_opens_no_hover_window(window) -> None:
+    """The hand cursor is the only hint. A hover text was a second top-level
+    window that landed outside the 280 px frame."""
     label = window.status_label._label
+    before = set(window.winfo_children())
 
     label.event_generate("<Enter>")
     window.update()
-    assert window._tooltip is not None
 
-    label.event_generate("<Leave>")
-    window.update()
-    assert window._tooltip is None
-
-
-def test_the_hover_text_says_what_a_click_does() -> None:
-    assert "Diagnose" in app.STATUS_TOOLTIP
+    assert set(window.winfo_children()) == before
+    assert window.status_label.cget("cursor") == "hand2"
 
 
 # --- The click on the status line ---------------------------------------------

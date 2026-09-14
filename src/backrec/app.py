@@ -53,12 +53,6 @@ DISCARD_CONFIRM_MS = 3000
 
 UI_POLL_MS = 150
 
-# The one way into the diagnosis from a window that carries neither a tray icon
-# nor a menu (design D25). Not an element of its own: the status line is already
-# there, already spans the width, and anything added would come out of the
-# recording controls - which are what the window is for.
-STATUS_TOOLTIP = "Klick öffnet die Diagnose"
-
 # Long enough for the closing line to be read, short enough that a stop from
 # outside does not run into its own deadline.
 EXIT_DELAY_MS = 900
@@ -126,10 +120,11 @@ class RecorderApp(ctk.CTk):
 
         # The status line says how things stand; a click on it says why
         # (design D25). Same treatment as the two level rows below, which have
-        # been clickable from the start.
+        # been clickable from the start. The hand cursor is the only hint: a
+        # hover text would be a second top-level window, and the 280 px window
+        # leaves it no room - it ended up outside the frame.
         self.status_label.bind("<Button-1>", self._open_diagnosis)
         self.status_label.configure(cursor="hand2")
-        self._install_tooltip(self.status_label, STATUS_TOOLTIP)
 
         mic_row = ctk.CTkFrame(self, fg_color="transparent")
         mic_row.pack(side="top", fill="x", padx=14, pady=(4, 0))
@@ -202,7 +197,6 @@ class RecorderApp(ctk.CTk):
         self._closing = False
         self._diagnosis_running = False
         self._silent_failures = False
-        self._tooltip: ctk.CTkToplevel | None = None
 
         # Without this the window X kills the process and takes the daemon
         # threads with it: the closing sequence never runs and a recording in
@@ -232,34 +226,6 @@ class RecorderApp(ctk.CTk):
         )
 
     # --- The diagnosis ------------------------------------------------------
-
-    def _install_tooltip(self, widget: ctk.CTkBaseClass, text: str) -> None:
-        """A clickable line is not self-explanatory for this audience.
-
-        The cursor shape announces that something happens on a click; this says
-        what (design D25).
-        """
-
-        def show(_event: object = None) -> None:
-            if self._tooltip is not None:
-                return
-            tip = ctk.CTkToplevel(self)
-            tip.overrideredirect(True)
-            tip.attributes("-topmost", True)
-            ctk.CTkLabel(
-                tip, text=text, font=("Segoe UI", 9), text_color=TEXT,
-                fg_color=BTN_IDLE, corner_radius=4, padx=6, pady=2,
-            ).pack()
-            tip.geometry(f"+{widget.winfo_rootx() - 150}+{widget.winfo_rooty() + 24}")
-            self._tooltip = tip
-
-        def hide(_event: object = None) -> None:
-            if self._tooltip is not None:
-                self._tooltip.destroy()
-                self._tooltip = None
-
-        widget.bind("<Enter>", show)
-        widget.bind("<Leave>", hide)
 
     def _open_diagnosis(self, _event: object = None) -> None:
         """The one route out of the window, on a click on the status line.

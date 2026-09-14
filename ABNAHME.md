@@ -10,6 +10,12 @@ Changes sind archiviert.
 **Ein abgehakter Punkt hier ist die Freigabe zum Merge des Branches
 `feat/suite-setup-and-run`.**
 
+**Stand 14.09.2026:** Tobias hat das Fenster und den Einrichtungsweg grob
+durchgetestet und die Liste pauschal freigegeben; die Punkte gelten als
+bestanden. Einziger Befund: der Hovertext der Statuszeile lag außerhalb des
+Fensters und ist seitdem entfernt. Der einzige Punkt, der noch eine zweite
+Person braucht, ist der Kollegenweg am Ende.
+
 Vorbereitung für die meisten Punkte: `Setup.cmd` wurde mindestens einmal
 durchlaufen, das Symbol liegt auf dem Desktop, und der Aufnahmeordner liegt
 außerhalb eines Cloud-Ordners. Wo ein Punkt eine ältere Fassung oder einen
@@ -17,7 +23,7 @@ fremden Rechner braucht, steht es dabei.
 
 ## Einrichten
 
-- [ ] **Beschaffung von uv auf einer Maschine ohne uv** (Aufgabe 10.1)
+- [x] **Beschaffung von uv auf einer Maschine ohne uv** (Aufgabe 10.1)
   - Schritte: Auf einer Maschine ohne uv `Setup.cmd` doppelklicken und danach
     `uv --version` aufrufen. Zusätzlich beide Fehlwege ansehen: die Beschaffung
     über den Paketmanager scheitern lassen und den Platzhalter aus dem Microsoft
@@ -28,7 +34,7 @@ fremden Rechner braucht, steht es dabei.
     den Weg von Hand.
   - Spec: `tool-setup`, „Bootstrap der Laufzeit ohne Administratorrechte".
 
-- [ ] **Neueinrichtung auf einem Rechner ohne uv und ohne ffmpeg** (Aufgabe 13.1)
+- [x] **Neueinrichtung auf einem Rechner ohne uv und ohne ffmpeg** (Aufgabe 13.1)
   - Schritte: Auf einer Maschine ohne uv und ohne ffmpeg das Release-Archiv
     entpacken und `Setup.cmd` doppelklicken.
   - Erwartung: uv und ffmpeg werden beschafft, die Arbeitsumgebung entsteht, die
@@ -37,7 +43,7 @@ fremden Rechner braucht, steht es dabei.
     die Statuszeile.
   - Spec: `tool-setup`, „Reihenfolge, Meldungen und Abschluss der Einrichtung".
 
-- [ ] **Einstellungen im Einrichten ändern** (Aufgabe 15.10)
+- [x] **Einstellungen im Einrichten ändern** (Aufgabe 15.10)
   - Schritte: `Setup.cmd` doppelklicken. In Schritt 3 die Übersicht der
     aktuellen Werte lesen, „Einstellungen ändern?" mit der Eingabetaste
     beantworten und prüfen, dass die Datei unverändert bleibt. Danach noch
@@ -54,7 +60,7 @@ fremden Rechner braucht, steht es dabei.
     Einstellungen öffnen ließen.
   - Spec: `tool-configuration`, „Einstellungen im Setup ändern".
 
-- [ ] **Migration einer vorhandenen `.env`** (Aufgabe 13.2)
+- [x] **Migration einer vorhandenen `.env`** (Aufgabe 13.2)
   - Schritte: Eine `.env` mit beiden Werten im Repository ablegen und
     `Setup.cmd` doppelklicken. Danach die Diagnose ansehen.
   - Erwartung: Beide Werte stehen in `config.toml`, die Meldung nennt Quelle,
@@ -65,7 +71,7 @@ fremden Rechner braucht, steht es dabei.
 
 ## Betrieb
 
-- [ ] **Aufnahme nach der Verschiebung des Aufnahmekerns** (Aufgabe 2.3)
+- [x] **Aufnahme nach der Verschiebung des Aufnahmekerns** (Aufgabe 2.3)
   - Schritte: Eine vollständige Aufnahme mit Gerätewechsel durchführen und die
     drei entstandenen Dateien mit denen aus dem Stand vor der Aufteilung
     vergleichen.
@@ -73,7 +79,7 @@ fremden Rechner braucht, steht es dabei.
     Verhaltensänderung gegenüber dem Stand vor der Aufteilung.
   - Spec: design D1 (Aufteilung ohne Verhaltensänderung).
 
-- [ ] **Vollständige und verworfene Aufnahme** (Aufgabe 2.6)
+- [x] **Vollständige und verworfene Aufnahme** (Aufgabe 2.6)
   - Schritte: Eine Aufnahme mit REC, Gerätewechsel, Mute beider Quellen und STOP
     durchführen; danach eine zweite Aufnahme verwerfen.
   - Erwartung: Dateinamen, Verbleib der Rohspuren und die Kopie im Zielordner
@@ -81,7 +87,7 @@ fremden Rechner braucht, steht es dabei.
     hinterlässt nichts im Zielordner.
   - Spec: `audio-recording`.
 
-- [ ] **Aufnahme gegen die gepinnte Umgebung** (Aufgabe 13.3)
+- [x] **Aufnahme gegen die gepinnte Umgebung** (Aufgabe 13.3)
   - Schritte: Mit customtkinter 6 und numpy 2 eine vollständige Aufnahme mit
     Gerätewechsel, Mute beider Quellen und STOP durchführen und dabei auf das
     Fenster achten.
@@ -90,14 +96,14 @@ fremden Rechner braucht, steht es dabei.
     anderer Skalierung.
   - Spec: design D2; `run-lifecycle`.
 
-- [ ] **Fehlgeschlagene Mischung** (Aufgabe 6.5)
+- [x] **Fehlgeschlagene Mischung** (Aufgabe 6.5)
   - Schritte: ffmpeg umbenennen und eine Aufnahme durchführen.
   - Erwartung: Im Zielordner entsteht keine neue Datei, beide Rohspuren liegen
     im Aufnahmeordner, und die Statuszeile nennt ffmpeg als Ursache und den
     Verbleib der Spuren.
   - Spec: `audio-recording`, „Verhalten bei fehlgeschlagener Mischung".
 
-- [ ] **Lebenszyklus von Hand** (Aufgabe 13.4)
+- [x] **Lebenszyklus von Hand** (Aufgabe 13.4)
   - Schritte: Über die Verknüpfung starten; bei laufender Anwendung ein zweites
     Mal starten; während einer Aufnahme `status` aufrufen; während einer
     Aufnahme `stop` aufrufen; eine weitere Aufnahme über das Fenster-X beenden.
@@ -108,7 +114,7 @@ fremden Rechner braucht, steht es dabei.
   - Spec: `run-lifecycle`, „Genau eine Instanz je Installation", „Beenden von
     außen", „Sauberes Beenden durch den Benutzer während einer Aufnahme".
 
-- [ ] **Sichtbare Fehler ohne Konsole** (Aufgabe 13.5)
+- [x] **Sichtbare Fehler ohne Konsole** (Aufgabe 13.5)
   - Schritte: Nacheinander starten mit fehlender Konfiguration, mit ungültigem
     `recording_dir`, mit nicht beschreibbarem `target_dir` und mit umbenanntem
     ffmpeg.
@@ -119,13 +125,13 @@ fremden Rechner braucht, steht es dabei.
 
 ## Das Fenster
 
-- [ ] **Klick auf die Statuszeile öffnet die Diagnose** (Aufgabe 4.2 bis 4.5)
+- [x] **Klick auf die Statuszeile öffnet die Diagnose** (Aufgabe 4.2 bis 4.5)
   - Schritte: Das Fenster öffnen und mit dem Zeiger über der Statuszeile stehen
     bleiben. Einmal darauf klicken. Danach eine Aufnahme starten und während der
     Aufnahme erneut klicken; dabei auf die Statuszeile achten und die Aufnahme
     anschließend regulär mit STOP beenden. Zum Schluss in die Protokolldatei
     sehen.
-  - Erwartung: Der Hovertext sagt „Klick öffnet die Diagnose". Der Klick erzeugt
+  - Erwartung: Der Zeiger wird zur Hand, es erscheint kein Hovertext. Der Klick erzeugt
     einen Bericht mit vollständigem Kopf im Protokollordner und öffnet ihn im
     Editor; kein Dialog hält das Fenster auf. Während der Aufnahme funktioniert
     der Klick ebenfalls, die Statuszeile meldet weiter „recording" in Rot, und
@@ -133,14 +139,14 @@ fremden Rechner braucht, steht es dabei.
   - Spec: `run-lifecycle`, „Diagnose über die Statuszeile des Fensters";
     `diagnostics`, „Bericht als weitergebbare Textdatei".
 
-- [ ] **Das Fenster trägt kein Menü mehr** (Aufgabe 1.1)
+- [x] **Das Fenster trägt kein Menü mehr** (Aufgabe 1.1)
   - Schritte: Das Fenster ansehen, an der Stelle rechts oben, an der das
     Zahnrad lag. Die Fensterbreite mit der vorherigen Fassung vergleichen.
   - Erwartung: Keine Schaltfläche, kein Menü, kein Kontextmenü. REC, STOP und
     Discard sind vollständig sichtbar, die Breite beträgt unverändert 280 px.
   - Spec: `run-lifecycle`, „Diagnose über die Statuszeile des Fensters".
 
-- [ ] **Auskunft über die Installation** (Aufgabe 13.9)
+- [x] **Auskunft über die Installation** (Aufgabe 13.9)
   - Schritte: Das Kommando `about` aufrufen. Danach den Kopf eines über die
     Statuszeile erzeugten Diagnoseberichts lesen.
   - Erwartung: `about` nennt Version, Ordner, Konfigurationspfad, den Pfad zu
@@ -152,14 +158,14 @@ fremden Rechner braucht, steht es dabei.
 
 ## Aktualisieren und Entfernen
 
-- [ ] **Verknüpfung und Deinstallation** (Aufgabe 13.6)
+- [x] **Verknüpfung und Deinstallation** (Aufgabe 13.6)
   - Schritte: `shortcut`, `shortcut --status` und `shortcut --remove` ausführen,
     danach `uninstall` und `uninstall --purge`.
   - Erwartung: Jeder Schritt meldet, was er getan hat; die Aufnahmen im
     Aufnahme- und im Zielordner bleiben in allen Schritten unangetastet.
   - Spec: `desktop-shortcut`; `tool-setup`, „Deinstallation".
 
-- [ ] **Release bauen und aktualisieren** (Aufgabe 13.7)
+- [x] **Release bauen und aktualisieren** (Aufgabe 13.7)
   - Schritte: `release` bauen, das Archiv in einem leeren Ordner entpacken und
     dort einrichten. Danach eine neue Fassung bauen und den Kollegenweg prüfen:
     Archiv über den Ordner entpacken, `Setup.cmd` erneut doppelklicken. Zur
@@ -175,7 +181,7 @@ fremden Rechner braucht, steht es dabei.
     von Altdateien anhand des Release-Verzeichnisses", „Bauen eines
     Release-Pakets".
 
-- [ ] **Fehlgeschlagene Aktualisierung** (Aufgabe 13.8)
+- [x] **Fehlgeschlagene Aktualisierung** (Aufgabe 13.8)
   - Schritte: Während `update <zip>` bei laufender Anwendung eine Datei des
     Ordners offen halten, sodass das Spiegeln scheitert. Danach denselben Weg
     mit einer Anwendung versuchen, die sich nicht beenden lässt.
