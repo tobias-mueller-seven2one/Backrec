@@ -12,9 +12,9 @@
 
 ## 3. Texte
 
-- [ ] 3.1 `LIES-MICH-ZUERST.txt` anpassen: „Im Alltag" nennt REC und STOP und das erneute Ausführen von `Setup.cmd` als Weg zu den Einstellungen; „Wenn etwas rot ist" nennt den Klick auf die Statuszeile und das Weiterschicken der Datei; „Aktualisieren" nennt nur noch das Entpacken über den Ordner und `Setup.cmd`. Kodierung (UTF-8 mit BOM), CRLF, höchstens 40 Zeilen und 80 Zeichen je Zeile bleiben eingehalten. Nachweis: `tests/test_docs.py` grün, einschließlich der auf die Statuszeile umgestellten Prüfung, und die Anleitungsprüfung des Release-Kommandos in `tests/test_release.py` grün.
-- [ ] 3.2 `README.md` (englisch) an den drei Stellen anpassen, die das Zahnrad-Menü beschreiben: die Übersicht des Fensters, der Abschnitt über die Wege zu den Kommandos und der Abschnitt über die beiden Aktualisierungswege. Nachweis: `Grep` auf `gear` in `README.md` findet nichts mehr, und `tests/test_docs.py` bleibt grün.
-- [ ] 3.3 `ABNAHME.md` anpassen: den Abschnitt zum Zahnrad-Menü durch einen Punkt „Klick auf die Statuszeile öffnet die Diagnose" ersetzen, im Punkt zum Aktualisieren Weg B streichen und Weg A allein stehen lassen, im Punkt „Einstellungen auf beiden Wegen ändern" den Menüteil entfernen, im Punkt zur Neueinrichtung und im Kollegenweg das Zahnrad durch die Statuszeile ersetzen. Nichts streichen, was weiterhin gilt. Nachweis: `Grep` auf `Zahnrad` in `ABNAHME.md` findet nichts mehr, jeder verbliebene Punkt nennt weiterhin eine existierende Spec.
+- [x] 3.1 `LIES-MICH-ZUERST.txt` anpassen: „Im Alltag" nennt REC und STOP und das erneute Ausführen von `Setup.cmd` als Weg zu den Einstellungen; „Wenn etwas rot ist" nennt den Klick auf die Statuszeile und das Weiterschicken der Datei; „Aktualisieren" nennt nur noch das Entpacken über den Ordner und `Setup.cmd`. Kodierung (UTF-8 mit BOM), CRLF, höchstens 40 Zeilen und 80 Zeichen je Zeile bleiben eingehalten. Nachweis: `tests/test_docs.py` grün, einschließlich der auf die Statuszeile umgestellten Prüfung, und die Anleitungsprüfung des Release-Kommandos in `tests/test_release.py` grün.
+- [x] 3.2 `README.md` (englisch) an den drei Stellen anpassen, die das Zahnrad-Menü beschreiben: die Übersicht des Fensters, der Abschnitt über die Wege zu den Kommandos und der Abschnitt über die beiden Aktualisierungswege. Nachweis: `Grep` auf `gear` in `README.md` findet nichts mehr, und `tests/test_docs.py` bleibt grün.
+- [x] 3.3 `ABNAHME.md` anpassen: den Abschnitt zum Zahnrad-Menü durch einen Punkt „Klick auf die Statuszeile öffnet die Diagnose" ersetzen, im Punkt zum Aktualisieren Weg B streichen und Weg A allein stehen lassen, im Punkt „Einstellungen auf beiden Wegen ändern" den Menüteil entfernen, im Punkt zur Neueinrichtung und im Kollegenweg das Zahnrad durch die Statuszeile ersetzen. Nichts streichen, was weiterhin gilt. Nachweis: `Grep` auf `Zahnrad` in `ABNAHME.md` findet nichts mehr, jeder verbliebene Punkt nennt weiterhin eine existierende Spec.
 
 ## 4. Tests
 
@@ -23,7 +23,7 @@
 - [x] 4.3 Neuer Test: Der Bericht wird geschrieben und das Öffnen läuft gegen ein ersetztes `os.startfile`, also ohne einen Editor auf dem Prüfrechner. Nachweis: nach dem Lauf liegt eine Berichtsdatei im Protokollverzeichnis und das Ersatz-`os.startfile` wurde genau einmal mit deren Pfad gerufen.
 - [x] 4.4 Neuer Test: Ein zweiter Klick während eines laufenden Berichts bleibt wirkungslos, und der Text der Statuszeile bleibt unverändert — auch wenn eine Aufnahme läuft. Nachweis: der Test zählt die Aufrufe von `control.run_doctor` und vergleicht den Text der Statuszeile vor und nach dem Klick.
 - [x] 4.5 Neuer Test: Das Fenster trägt keine Menü-Schaltfläche mehr, und REC, STOP und Discard sind sichtbar. Nachweis: der Test prüft, dass `RecorderApp` kein Merkmal `menu_button` führt, und dass die drei Bedienelemente abgebildet sind.
-- [ ] 4.6 In `tests/test_docs.py` die Prüfung auf „Zahnrad" in der Anleitung durch eine Prüfung auf die Statuszeile und die Diagnose ersetzen, und sicherstellen, dass die Anleitung kein Menü mehr nennt. Nachweis: `pytest -q tests/test_docs.py` grün.
+- [x] 4.6 In `tests/test_docs.py` die Prüfung auf „Zahnrad" in der Anleitung durch eine Prüfung auf die Statuszeile und die Diagnose ersetzen, und sicherstellen, dass die Anleitung kein Menü mehr nennt. Nachweis: `pytest -q tests/test_docs.py` grün.
 
 ## 5. Abschluss
 

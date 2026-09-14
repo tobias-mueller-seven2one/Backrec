@@ -15,7 +15,8 @@ Built with `customtkinter`, `sounddevice`, `soundcard` and `ffmpeg`.
 ## Features
 
 - One-click **REC / STOP** with a minimal always-on-top window
-- A gear button in the window opens a menu: update, diagnose, open logs, about
+- Clicking the status line runs the diagnosis and opens the report — the one
+  route out of the window, also available while a recording runs
 - Records the default communication microphone and the default speaker (WASAPI loopback) simultaneously
 - Live level indicators and per-source mute toggle (click the dot/label)
 - Automatically follows Windows default device changes while recording
@@ -72,10 +73,11 @@ All commands run through `python -m backrec <command>` or the generated
 | `release [--output <dir>]` | Builds the distribution archive | 0, else 1 |
 | `about` | Version, folders, path of the guide, how to remove | 0 |
 
-`stop`, `update`, `doctor`, `uninstall` and `release` exist only as commands and
-— for the first four — as entries in the window's gear menu. There is
-deliberately no `Stop.cmd` or `Update.cmd`: every file in the root folder is a
-question a colleague might ask.
+`stop`, `update`, `doctor`, `uninstall` and `release` exist only as commands. The
+window carries no menu: the one thing a colleague has to reach from it is the
+diagnosis, and a click on the status line does that. There is deliberately no
+`Stop.cmd` or `Update.cmd` either: every file in the root folder is a question a
+colleague might ask.
 
 ## Configuration
 
@@ -144,15 +146,17 @@ archive that reaches a chat channel cannot be recalled.
 The archive carries `Backrec\` as its single top level plus a
 `release-manifest.json` listing every file with its SHA-256.
 
-Two update routes, both without Git:
+One documented route, without Git: extract the new archive over the folder and
+double-click `Setup.cmd`. The setup notices the version change, stops a running
+instance, syncs, removes files the new release no longer has, runs the diagnosis
+and offers to start.
 
-- **A** — extract the new archive over the folder, double-click `Setup.cmd`. The
-  setup notices the version change, stops a running instance, syncs, removes
-  files the new release no longer has, runs the diagnosis and offers to start.
-- **B** — the gear menu entry *Aktualisieren…*. The archive is staged next to the
-  folder, every file checked against its checksum, and a detached PowerShell 5.1
-  helper outside the folder mirrors the files in and restarts. The folder keeps
-  its name, so the desktop shortcut stays valid, and `.venv` stays where it is.
+`update <zip>` stays as a command and takes the careful path: the archive is
+staged next to the folder, every file checked against its checksum, and — if an
+instance is running — a detached PowerShell 5.1 helper outside the folder mirrors
+the files in and restarts. The folder keeps its name, so the desktop shortcut
+stays valid, and `.venv` stays where it is. The window used to offer this as a
+second route behind its gear menu; that menu is gone, and with it the route.
 
 `update --git` is the developer route: `git pull --ff-only`, sync, diagnosis. It
 refuses without a `.git` folder and points at the archive route.

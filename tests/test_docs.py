@@ -69,8 +69,23 @@ def test_the_guide_explains_the_windows_warning_without_a_technical_term() -> No
     assert "SmartScreen" not in GUIDE
 
 
-def test_the_guide_names_the_gear_in_its_everyday_section() -> None:
-    assert "Zahnrad" in GUIDE
+def test_the_guide_sends_the_reader_to_the_status_line_for_the_diagnosis() -> None:
+    """The click is not self-explanatory, so the guide has to name it."""
+    assert "Statuszeile" in GUIDE
+    assert "Diagnose" in GUIDE
+
+
+def test_the_guide_names_no_menu_in_the_window() -> None:
+    for absent in ("Zahnrad", "Menü", "Menu"):
+        assert absent not in GUIDE
+
+
+def test_the_guide_names_one_way_to_change_a_setting_and_one_to_update() -> None:
+    """Both go through Setup.cmd now - the window carries neither."""
+    everyday = GUIDE.split("Im Alltag")[1].split("Wenn etwas rot ist")[0]
+
+    assert "Setup.cmd" in everyday
+    assert "Einstellungen ändern" in everyday
 
 
 def test_the_guide_carries_the_closing_line_the_convention_asks_for() -> None:

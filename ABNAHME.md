@@ -1,10 +1,11 @@
 # Handabnahme Backrec
 
-Diese Liste gehört Tobias. Sie enthält die Punkte aus dem Change
-`add-suite-setup-and-run`, die keine Maschine abnehmen kann: eine echte Aufnahme
-mit Mikrofon und Systemton, ein Blick in ein Fenster, das sich öffnet, ein
-Rechner ohne uv und ohne ffmpeg, und der Durchlauf mit einem Kollegen. Alles
-maschinell Prüfbare ist erledigt und committet; der Change ist archiviert.
+Diese Liste gehört Tobias. Sie enthält die Punkte aus den Changes
+`add-suite-setup-and-run` und `slim-window-menu`, die keine Maschine abnehmen
+kann: eine echte Aufnahme mit Mikrofon und Systemton, ein Blick in ein Fenster,
+das sich öffnet, ein Rechner ohne uv und ohne ffmpeg, und der Durchlauf mit
+einem Kollegen. Alles maschinell Prüfbare ist erledigt und committet; beide
+Changes sind archiviert.
 
 **Ein abgehakter Punkt hier ist die Freigabe zum Merge des Branches
 `feat/suite-setup-and-run`.**
@@ -32,27 +33,26 @@ fremden Rechner braucht, steht es dabei.
     entpacken und `Setup.cmd` doppelklicken.
   - Erwartung: uv und ffmpeg werden beschafft, die Arbeitsumgebung entsteht, die
     Konfiguration wird angelegt, die Diagnose meldet grün, die Verknüpfung liegt
-    auf dem Desktop, und die Schlussworte nennen den Startweg und das Zahnrad.
+    auf dem Desktop, und die Schlussworte nennen den Startweg und den Klick auf
+    die Statuszeile.
   - Spec: `tool-setup`, „Reihenfolge, Meldungen und Abschluss der Einrichtung".
 
-- [ ] **Einstellungen auf beiden Wegen ändern** (Aufgabe 15.10)
+- [ ] **Einstellungen im Einrichten ändern** (Aufgabe 15.10)
   - Schritte: `Setup.cmd` doppelklicken. In Schritt 3 die Übersicht der
     aktuellen Werte lesen, „Einstellungen ändern?" mit der Eingabetaste
     beantworten und prüfen, dass die Datei unverändert bleibt. Danach noch
     einmal doppelklicken, diesmal mit „j" antworten, bei `log_level` absichtlich
     einen unsinnigen Wert eingeben, danach einen gültigen setzen und den Lauf zu
-    Ende führen. Zuletzt im Fenster das Zahnrad öffnen und „Einstellungen
-    öffnen" wählen.
+    Ende führen. Zuletzt das Fenster öffnen und prüfen, dass es keinen eigenen
+    Weg zu den Einstellungen mehr anbietet.
   - Erwartung: Die Übersicht nennt jeden Wert in einer Zeile. Die Eingabetaste
     lässt alles stehen. Der unsinnige Wert wird in einem Satz ohne Fachbegriffe
     zurückgewiesen, die erlaubten Werte werden genannt, und die Frage kommt
     erneut. Der neue Wert steht danach in der Datei, alle Kommentare stehen noch
     darin. Die Schlussworte nennen den Ort der Datei und beide Wege zum Ändern.
-    Der Menüeintrag öffnet die Datei im Editor, das Fenster bleibt bedienbar,
-    und danach erscheint der Hinweis, dass die Änderung nach dem nächsten Start
-    gilt.
-  - Spec: `tool-configuration`, „Einstellungen im Setup ändern";
-    `run-lifecycle`, „Öffnen der Einstellungen aus dem Menü".
+    Das Fenster trägt keine Schaltfläche und kein Menü, über das sich die
+    Einstellungen öffnen ließen.
+  - Spec: `tool-configuration`, „Einstellungen im Setup ändern".
 
 - [ ] **Migration einer vorhandenen `.env`** (Aufgabe 13.2)
   - Schritte: Eine `.env` mit beiden Werten im Repository ablegen und
@@ -117,19 +117,38 @@ fremden Rechner braucht, steht es dabei.
     Keine Ausnahmeverfolgung auf dem Bildschirm.
   - Spec: `run-lifecycle`, „Prüfende Startsequenz mit sichtbarem Fehler".
 
-## Fenster-Menü
+## Das Fenster
 
-- [ ] **Alle fünf Einträge des Zahnrad-Menüs** (Aufgabe 13.9)
-  - Schritte: Nacheinander „Aktualisieren…", „Diagnose", „Logs öffnen",
-    „Einstellungen öffnen" und „Info" auslösen. Danach eine Aufnahme starten und
-    das Menü erneut öffnen. Zum Schluss in die Protokolldatei sehen.
-  - Erwartung: „Diagnose" erzeugt einen Bericht mit vollständigem Kopf und
-    öffnet ihn; „Info" nennt Version, den Pfad zu `LIES-MICH-ZUERST.txt` und den
-    Weg zum Entfernen; während der Aufnahme sind „Aktualisieren…", „Diagnose"
-    und „Einstellungen öffnen" gesperrt und der Grund ist lesbar; jede Auswahl
-    steht im Protokoll.
-  - Spec: `run-lifecycle`, „Menü im Anwendungsfenster", „Öffnen der Einstellungen
-    aus dem Menü"; `diagnostics`, „Bericht als weitergebbare Textdatei".
+- [ ] **Klick auf die Statuszeile öffnet die Diagnose** (Aufgabe 4.2 bis 4.5)
+  - Schritte: Das Fenster öffnen und mit dem Zeiger über der Statuszeile stehen
+    bleiben. Einmal darauf klicken. Danach eine Aufnahme starten und während der
+    Aufnahme erneut klicken; dabei auf die Statuszeile achten und die Aufnahme
+    anschließend regulär mit STOP beenden. Zum Schluss in die Protokolldatei
+    sehen.
+  - Erwartung: Der Hovertext sagt „Klick öffnet die Diagnose". Der Klick erzeugt
+    einen Bericht mit vollständigem Kopf im Protokollordner und öffnet ihn im
+    Editor; kein Dialog hält das Fenster auf. Während der Aufnahme funktioniert
+    der Klick ebenfalls, die Statuszeile meldet weiter „recording" in Rot, und
+    die Aufnahme ist nach STOP vollständig. Jeder Klick steht im Protokoll.
+  - Spec: `run-lifecycle`, „Diagnose über die Statuszeile des Fensters";
+    `diagnostics`, „Bericht als weitergebbare Textdatei".
+
+- [ ] **Das Fenster trägt kein Menü mehr** (Aufgabe 1.1)
+  - Schritte: Das Fenster ansehen, an der Stelle rechts oben, an der das
+    Zahnrad lag. Die Fensterbreite mit der vorherigen Fassung vergleichen.
+  - Erwartung: Keine Schaltfläche, kein Menü, kein Kontextmenü. REC, STOP und
+    Discard sind vollständig sichtbar, die Breite beträgt unverändert 280 px.
+  - Spec: `run-lifecycle`, „Diagnose über die Statuszeile des Fensters".
+
+- [ ] **Auskunft über die Installation** (Aufgabe 13.9)
+  - Schritte: Das Kommando `about` aufrufen. Danach den Kopf eines über die
+    Statuszeile erzeugten Diagnoseberichts lesen.
+  - Erwartung: `about` nennt Version, Ordner, Konfigurationspfad, den Pfad zu
+    `LIES-MICH-ZUERST.txt`, die drei Schritte zum Entfernen und den Ort der
+    verbleibenden Daten. Der Kopf des Berichts nennt Version, Ordner und
+    Konfigurationspfad — das, was ein Kollege ohne Kommandozeile davon braucht.
+  - Spec: `run-lifecycle`, „Auskunft über die Installation"; `tool-setup`,
+    „Deinstallation".
 
 ## Aktualisieren und Entfernen
 
@@ -140,23 +159,26 @@ fremden Rechner braucht, steht es dabei.
     Aufnahme- und im Zielordner bleiben in allen Schritten unangetastet.
   - Spec: `desktop-shortcut`; `tool-setup`, „Deinstallation".
 
-- [ ] **Release bauen und beide Wege der Aktualisierung** (Aufgabe 13.7)
+- [ ] **Release bauen und aktualisieren** (Aufgabe 13.7)
   - Schritte: `release` bauen, das Archiv in einem leeren Ordner entpacken und
-    dort einrichten. Danach eine neue Fassung bauen und beide Wege prüfen: Weg A
-    (Archiv über den Ordner entpacken, `Setup.cmd` erneut) und Weg B (Menüpunkt
-    „Aktualisieren…").
+    dort einrichten. Danach eine neue Fassung bauen und den Kollegenweg prüfen:
+    Archiv über den Ordner entpacken, `Setup.cmd` erneut doppelklicken. Zur
+    Sicherheit denselben Vorgang noch einmal über das Kommando `update <zip>`,
+    das als Entwicklerweg bleibt. Dabei prüfen, dass das Fenster selbst keinen
+    Weg zum Aktualisieren mehr anbietet.
   - Erwartung: In beiden Fällen bleiben Konfiguration, Protokolle, Zustand und
     die Aufnahmen unberührt, die Arbeitsumgebung wird nicht neu aufgebaut, eine
     Altdatei des vorherigen Release verschwindet, und eine selbst angelegte
-    Datei im Ordner bleibt liegen.
+    Datei im Ordner bleibt liegen. Das Fenster trägt keinen Auswahldialog für
+    ein Archiv mehr.
   - Spec: `tool-setup`, „Aktualisierung über ein neues Release-ZIP", „Entfernen
     von Altdateien anhand des Release-Verzeichnisses", „Bauen eines
     Release-Pakets".
 
 - [ ] **Fehlgeschlagene Aktualisierung** (Aufgabe 13.8)
-  - Schritte: Während Weg B eine Datei des Ordners offen halten, sodass das
-    Spiegeln scheitert. Danach denselben Weg mit einer Anwendung versuchen, die
-    sich nicht beenden lässt.
+  - Schritte: Während `update <zip>` bei laufender Anwendung eine Datei des
+    Ordners offen halten, sodass das Spiegeln scheitert. Danach denselben Weg
+    mit einer Anwendung versuchen, die sich nicht beenden lässt.
   - Erwartung: Der bisherige Stand bleibt vollständig und lauffähig, der Rückweg
     wird genannt, und es bleibt kein halb entpackter Ordner zurück. Im zweiten
     Fall bricht der Helfer **vor** dem ersten Spiegeln ab.
@@ -173,7 +195,8 @@ fremden Rechner braucht, steht es dabei.
   - Erwartung: (a) Sie öffnet die Anleitung von sich aus und weiß danach, was
     sie anklicken muss; (b) sie kommt vom Archiv zum laufenden Fenster, ohne ein
     Kommando zu tippen; (c) jede Frage lässt sich mit der Eingabetaste
-    beantworten; (d) sie findet das Zahnrad-Menü ohne Hilfe; (e) keine Meldung
+    beantworten; (d) sie findet den Weg zur Diagnose ohne Hilfe — sie klickt auf
+    die Statuszeile, nachdem sie „Wenn etwas rot ist" gelesen hat; (e) keine Meldung
     enthält einen Fachbegriff, einen Pfad zum Abschreiben oder eine
     Ausnahmeverfolgung; (f) nach dem ersten Lauf erscheint kein
     Sicherheitsdialog mehr; (g) sie benennt am Ende richtig, wo die Anwendung
