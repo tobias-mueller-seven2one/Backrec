@@ -27,6 +27,6 @@
 
 ## 5. Abschluss
 
-- [ ] 5.1 Vollständiger Lauf der Testsuite. Nachweis: kein Fehlschlag; die Gesamtzahl weicht gegenüber dem Ausgangsstand von 432 nur um die entfernten und die neu hinzugekommenen Tests ab, und die Abweichung ist im Ergebnisbericht benannt.
-- [ ] 5.2 `openspec validate slim-window-menu --strict` und nach dem Archivieren `openspec validate --specs --strict` mit 6 von 6 gültigen Fähigkeiten. Nachweis: beide Kommandos melden gültig.
-- [ ] 5.3 Change archivieren und Schlusscommit setzen; `git status` ist danach sauber. Nachweis: `openspec archive slim-window-menu --yes` meldet Erfolg, `git status --short` gibt nichts aus.
+- [x] 5.1 Vollständiger Lauf der Testsuite. Nachweis: kein Fehlschlag; die Gesamtzahl weicht gegenüber dem Ausgangsstand von 432 nur um die entfernten und die neu hinzugekommenen Tests ab, und die Abweichung ist im Ergebnisbericht benannt.
+- [x] 5.2 `openspec validate slim-window-menu --strict` und nach dem Archivieren `openspec validate --specs --strict` mit 6 von 6 gültigen Fähigkeiten. Nachweis: beide Kommandos melden gültig.
+- [x] 5.3 Change archivieren und Schlusscommit setzen; `git status` ist danach sauber. Nachweis: `openspec archive slim-window-menu --yes` meldet Erfolg, `git status --short` gibt nichts aus.

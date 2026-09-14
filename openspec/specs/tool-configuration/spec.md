@@ -115,7 +115,7 @@ Das Einrichten MUST Schlüssel, die die Vorlage führt und die lokale Datei nich
 
 ### Requirement: Einstellungen im Setup ändern
 
-Das Einrichten MUST der Weg sein, auf dem jede Einstellung ohne Kommandozeile und ohne Handarbeit an der Datei gesetzt werden kann. Es MUST dafür jeden Schlüssel der Vorlage anbieten, nicht nur die Pflichtwerte.
+Das Einrichten MUST der Weg sein, auf dem jede Einstellung ohne Kommandozeile und ohne Handarbeit an der Datei gesetzt werden kann. Es MUST dafür jeden Schlüssel der Vorlage anbieten, nicht nur die Pflichtwerte. Es MUST der einzige solche Weg sein: Das Anwendungsfenster MUST NOT einen eigenen Bedienweg zum Ändern oder zum Öffnen der Einstellungen anbieten. Der Ort der Datei MUST in jeder Abschlussausgabe des Einrichtens und im Kopf des Diagnoseberichts stehen, damit sie auch von Hand auffindbar bleibt.
 
 Im **ersten Lauf** MUST es nach den Pflichtwerten in **einer** Frage anbieten, die übrigen Einstellungen anzupassen. Bei Zustimmung MUST es jeden übrigen Schlüssel der Vorlage einzeln abfragen, dabei je Schlüssel eine Zeile Bedeutung aus dem Kommentar der Vorlage nennen und den geltenden Wert als Vorgabe in Klammern zeigen; die Eingabetaste MUST diesen Wert behalten. Bei Ablehnung MUST die Vorlage gelten. Die beiden Verzeichnisse, die aus dem Basisordner abgeleitet werden, MUST NOT im ersten Lauf ein zweites Mal gefragt werden.
 
@@ -167,6 +167,12 @@ Die unbeaufsichtigte Einrichtung MUST nichts davon fragen. Das Ergänzen neuer V
 - **WHEN** das Einrichten unbeaufsichtigt läuft
 - **THEN** wird weder die Übersicht noch eine Frage nach Einstellungen gezeigt
 - **AND** die vorhandenen Werte bleiben unverändert
+
+#### Scenario: Kein Weg zu den Einstellungen im Fenster
+
+- **WHEN** ein Benutzer im Anwendungsfenster nach einem Weg zu den Einstellungen sucht
+- **THEN** bietet das Fenster keinen an
+- **AND** der Ort der Datei steht in der Abschlussausgabe des Einrichtens und im Kopf des Diagnoseberichts
 
 ### Requirement: Ableitung der Verzeichnisse aus einem Basisordner
 

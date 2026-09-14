@@ -180,43 +180,9 @@ Die Statusauskunft MUST melden, ob die Anwendung läuft, und dazu Prozesskennung
 - **THEN** meldet sie, dass die Anwendung nicht läuft
 - **AND** sie endet ohne Fehler
 
-### Requirement: Menü im Anwendungsfenster
-
-Weil die Anwendung kein Symbol im Infobereich betreibt, MUST das Anwendungsfenster selbst die Funktionen tragen, die dort sonst liegen. Das Fenster MUST eine dauerhaft sichtbare Schaltfläche führen, die ein Menü mit diesen fünf Einträgen in dieser Reihenfolge öffnet: Aktualisieren, Diagnose, Protokolle öffnen, Einstellungen öffnen und Auskunft über die Installation. Die Reihenfolge MUST der suiteweiten Reihenfolge entsprechen, in der das Öffnen der Einstellungen zwischen dem Öffnen der Protokolle und der Auskunft steht. Die Schaltfläche MUST NOT die Fensterbreite verändern und MUST NOT die Bedienelemente der Aufnahme verdrängen. Die Auskunft MUST Werkzeugname, Version, Repository-Pfad, Konfigurationspfad, den vollständigen Pfad der Einstiegsanleitung `LIES-MICH-ZUERST.txt` und den Weg zur Deinstallation nennen. Jede Menüauswahl MUST protokolliert werden. Während eine langlaufende Menüaktion arbeitet, MUST das Menü deaktiviert sein und der Vorgang MUST im Fenster sichtbar sein. Während einer laufenden Aufnahme MUST Aktualisieren, Diagnose und das Öffnen der Einstellungen deaktiviert sein. Die Menüeinträge MUST dieselben Vorgänge auslösen wie die gleichnamigen Kommandos.
-
-#### Scenario: Menü öffnen
-
-- **WHEN** der Benutzer die Schaltfläche im Fenster anklickt
-- **THEN** erscheint ein Menü mit Aktualisieren, Diagnose, Protokolle öffnen, Einstellungen öffnen und Auskunft in dieser Reihenfolge
-- **AND** die Fensterbreite bleibt unverändert
-
-#### Scenario: Auskunft über die Installation
-
-- **WHEN** der Benutzer die Auskunft wählt
-- **THEN** nennt sie Werkzeugname, Version, Repository-Pfad und Konfigurationspfad
-- **AND** sie nennt den vollständigen Pfad der Einstiegsanleitung `LIES-MICH-ZUERST.txt`
-- **AND** sie nennt den Weg zur Deinstallation
-
-#### Scenario: Menü während einer Aufnahme
-
-- **WHEN** eine Aufnahme läuft und der Benutzer das Menü öffnet
-- **THEN** sind Aktualisieren, Diagnose und das Öffnen der Einstellungen nicht auswählbar
-- **AND** der Grund ist erkennbar
-
-#### Scenario: Langlaufende Menüaktion
-
-- **WHEN** eine über das Menü angestoßene Aktion arbeitet
-- **THEN** ist das Menü währenddessen deaktiviert
-- **AND** das Fenster zeigt den laufenden Vorgang
-
-#### Scenario: Menüauswahl wird protokolliert
-
-- **WHEN** der Benutzer einen Menüeintrag wählt
-- **THEN** steht die Auswahl in der Protokolldatei
-
 ### Requirement: Zugang zu den Protokollen
 
-Es MUST ein Kommando geben, das das Protokollverzeichnis öffnet oder das Protokoll fortlaufend anzeigt, und derselbe Vorgang MUST über das Menü im Anwendungsfenster erreichbar sein. Ein Fehlschlag beim Öffnen MUST protokolliert werden und MUST NOT die Anwendung beenden.
+Es MUST ein Kommando geben, das das Protokollverzeichnis öffnet oder das Protokoll fortlaufend anzeigt. Der Diagnosebericht MUST im selben Verzeichnis liegen wie die Protokolle, damit ein Benutzer ohne Kommandozeile sie über den Klick auf die Statuszeile erreicht. Ein Fehlschlag beim Öffnen MUST protokolliert werden und MUST NOT die Anwendung beenden.
 
 #### Scenario: Protokollverzeichnis öffnen
 
@@ -228,24 +194,68 @@ Es MUST ein Kommando geben, das das Protokollverzeichnis öffnet oder das Protok
 - **WHEN** die fortlaufende Anzeige angefordert wird
 - **THEN** erscheinen neue Protokollzeilen, während sie geschrieben werden
 
-### Requirement: Öffnen der Einstellungen aus dem Menü
+#### Scenario: Weg zu den Protokollen ohne Kommandozeile
 
-Das Menü im Anwendungsfenster MUST die Konfigurationsdatei im Standardprogramm für Text öffnen können, damit ein Benutzer ohne Kommandozeile einen Wert auch dann ändern kann, wenn er die Einrichtung nicht noch einmal laufen lassen will. Der Eintrag MUST zwischen dem Öffnen der Protokolle und der Auskunft über die Installation stehen. Die Auswahl MUST protokolliert werden. Das Öffnen MUST NOT den Hauptthread des Fensters blockieren. Nach dem Öffnen MUST ein Hinweis sagen, dass eine Änderung erst nach dem nächsten Start des Werkzeugs gilt. Existiert noch keine Konfiguration, MUST der Hinweis stattdessen auf die Einrichtung verweisen. Ein fehlgeschlagenes Öffnen MUST den Ort der Datei nennen und MUST NOT das Fenster beenden.
+- **WHEN** ein Benutzer ohne Kommandozeile über die Statuszeile die Diagnose auslöst
+- **THEN** liegt der geöffnete Bericht im Protokollverzeichnis
+- **AND** die Protokolle liegen im selben Verzeichnis
 
-#### Scenario: Einstellungen öffnen
+### Requirement: Diagnose über die Statuszeile des Fensters
 
-- **WHEN** der Benutzer das Öffnen der Einstellungen wählt
-- **THEN** öffnet sich die Konfigurationsdatei im Standardprogramm für Text
-- **AND** ein Hinweis sagt, dass die Änderung nach dem nächsten Start gilt
+Weil die Anwendung kein Symbol im Infobereich betreibt, MUST das Anwendungsfenster selbst den einen Vorgang tragen, den ein Benutzer ohne Kommandozeile daraus anstoßen können MUST: die Diagnose. Das Fenster MUST dafür kein zusätzliches Bedienelement führen, sondern MUST die ohnehin vorhandene Statuszeile anklickbar machen. Ein Klick auf die Statuszeile MUST denselben Vorgang auslösen wie das gleichnamige Kommando mit Bericht, also den Bericht schreiben und im Standardprogramm für Text öffnen. Ein Hovertext MUST sagen, was ein Klick bewirkt.
+
+Der Vorgang MUST außerhalb des Threads laufen, der das Fenster zeichnet, und MUST NOT im Aufnahme-Thread laufen. Er MUST NOT modal sein und MUST NOT auf eine Antwort warten. Er MUST protokolliert werden. Ein zweiter Klick, während der erste Vorgang noch arbeitet, MUST wirkungslos bleiben und MUST NOT einen zweiten Bericht anstoßen. Ein Fehlschlag MUST protokolliert werden und MUST NOT das Fenster beenden.
+
+Der Klick MUST auch während einer laufenden Aufnahme erlaubt sein, weil die Diagnose ausschließlich liest. Er MUST NOT die Aufnahme unterbrechen, verzögern oder ihr Ergebnis verändern, und er MUST NOT den Text der Statuszeile überschreiben, solange die Statuszeile den Zustand der Aufnahme meldet.
+
+Die Schaltfläche, die bisher ein Menü im Anwendungsfenster geöffnet hat, MUST entfallen. Die Breite des Fensters MUST unverändert bleiben, und die Bedienelemente der Aufnahme MUST NOT verdrängt werden.
+
+#### Scenario: Klick auf die Statuszeile
+
+- **WHEN** der Benutzer die Statuszeile im Fenster anklickt
+- **THEN** wird der Diagnosebericht geschrieben und im Standardprogramm für Text geöffnet
 - **AND** das Fenster bleibt währenddessen bedienbar
+- **AND** die Auswahl steht in der Protokolldatei
 
-#### Scenario: Es gibt noch keine Einstellungen
+#### Scenario: Hovertext der Statuszeile
 
-- **WHEN** der Benutzer das Öffnen wählt und keine Konfiguration existiert
-- **THEN** nennt der Hinweis die Einrichtung als nächsten Schritt
+- **WHEN** der Zeiger über der Statuszeile steht
+- **THEN** erscheint ein Hovertext, der sagt, dass ein Klick die Diagnose öffnet
 
-#### Scenario: Kein Programm für Text vorhanden
+#### Scenario: Klick während einer Aufnahme
 
-- **WHEN** das Öffnen fehlschlägt
-- **THEN** nennt die Meldung den Ort der Konfigurationsdatei
-- **AND** das Fenster bleibt bestehen
+- **WHEN** eine Aufnahme läuft und der Benutzer die Statuszeile anklickt
+- **THEN** entsteht der Bericht
+- **AND** die Aufnahme läuft unverändert weiter und ihr Ergebnis bleibt vollständig
+- **AND** die Statuszeile meldet weiterhin den Zustand der Aufnahme
+
+#### Scenario: Zweiter Klick während des ersten Vorgangs
+
+- **WHEN** der Benutzer erneut klickt, während der erste Vorgang noch arbeitet
+- **THEN** bleibt der zweite Klick wirkungslos
+- **AND** es entsteht kein zweiter Bericht
+
+#### Scenario: Fenster ohne Menü-Schaltfläche
+
+- **WHEN** das Fenster betrachtet wird
+- **THEN** trägt es keine Schaltfläche, die ein Menü öffnet
+- **AND** die Fensterbreite ist unverändert
+- **AND** die Bedienelemente der Aufnahme sind vollständig sichtbar
+
+### Requirement: Auskunft über die Installation
+
+Es MUST ein Kommando geben, das Auskunft über die Installation gibt. Die Auskunft MUST Werkzeugname, Version, Repository-Pfad, Konfigurationspfad, den vollständigen Pfad der Einstiegsanleitung `LIES-MICH-ZUERST.txt` und den Weg zur Deinstallation nennen. Sie MUST dabei sagen, dass Konfiguration, Protokolle und Zustand im benutzerbezogenen Anwendungsdatenverzeichnis liegen und getrennt zu löschen sind.
+
+Dieselben Angaben MUST im Kopf des Diagnoseberichts stehen, soweit sie den Zustand der Installation beschreiben, damit ein Benutzer ohne Kommandozeile sie über den Klick auf die Statuszeile erreicht.
+
+#### Scenario: Auskunft über die Kommandozeile
+
+- **WHEN** die Auskunft angefordert wird
+- **THEN** nennt sie Werkzeugname, Version, Repository-Pfad und Konfigurationspfad
+- **AND** sie nennt den vollständigen Pfad der Einstiegsanleitung `LIES-MICH-ZUERST.txt`
+- **AND** sie nennt den Weg zur Deinstallation und den Ort der verbleibenden Daten
+
+#### Scenario: Auskunft ohne Kommandozeile
+
+- **WHEN** ein Benutzer ohne Kommandozeile wissen will, welche Fassung wo installiert ist
+- **THEN** nennt der über die Statuszeile erreichbare Bericht Version, Repository-Pfad und Konfigurationspfad
