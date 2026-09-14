@@ -88,11 +88,6 @@ ENV_BOOTSTRAPPED = "BACKREC_ENV_READY"
 # answers questions, the other opens the file and reads the comments.
 SETTINGS_CHANGE_HINT = "Ändern: Setup.cmd erneut ausführen oder die Datei im Editor öffnen."
 
-# Said wherever the settings are opened. A changed value is read when the tool
-# starts, not while it runs -- and a colleague who changes a folder and then
-# waits for something to happen has no way of knowing that.
-SETTINGS_RESTART_HINT = "Änderungen gelten nach dem nächsten Start von Backrec."
-
 UNINSTALL_SENTENCES: tuple[str, str, str] = (
     "Schließe das Fenster.",
     "Lösche das Symbol vom Desktop.",
@@ -1014,42 +1009,6 @@ def open_logs() -> CommandResult:
         return CommandResult(ok=False, code=1, lines=(f"Ordner: {directory}",))
 
     return CommandResult(ok=True, lines=(f"Ordner: {directory}",))
-
-
-def open_settings(config_path: Path | None = None) -> CommandResult:
-    """Opens the settings file in whatever the system uses for text.
-
-    The second of the two ways to change a setting (the first is running the
-    setup again). Deliberately not an editor of our own choosing: the file
-    carries its explanations as comments, and whoever opens it should see it in
-    the program they already know.
-    """
-    target = paths.config_path(config_path)
-
-    if not target.is_file():
-        logger.warning("Einstellungen nicht vorhanden: %s", target)
-        return CommandResult(
-            ok=False,
-            code=1,
-            lines=(
-                "Was ist passiert: Es gibt noch keine Einstellungen.",
-                "Was tun: Setup.cmd im Ordner des Werkzeugs doppelklicken.",
-            ),
-        )
-
-    try:
-        if os.name == "nt":
-            os.startfile(str(target))  # noqa: S606 - exactly what the function is for
-        else:
-            subprocess.Popen(["xdg-open", str(target)])
-    except OSError as exc:
-        # Never fatal: the window that asked for it must not end because no
-        # editor appeared, and the location itself is still an answer.
-        logger.warning("Einstellungen liessen sich nicht oeffnen: %s", exc)
-        return CommandResult(ok=False, code=1, lines=(f"Die Einstellungen liegen hier: {target}",))
-
-    logger.info("Einstellungen geoeffnet: %s", target)
-    return CommandResult(ok=True, lines=(f"Einstellungen: {target}", SETTINGS_RESTART_HINT))
 
 
 def follow_logs(stream: TextIO | None = None) -> CommandResult:
