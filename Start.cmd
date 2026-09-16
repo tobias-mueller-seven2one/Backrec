@@ -1,5 +1,5 @@
 @echo off
-REM Duenner Wrapper: startet Backrec fensterlos. Keine Logik hier.
+REM A thin wrapper. No logic belongs in this file.
 setlocal
 cd /d "%~dp0"
 chcp 65001 >nul
@@ -17,9 +17,8 @@ if not exist ".venv\Scripts\backrec.exe" (
 set EXITCODE=%ERRORLEVEL%
 
 :ende
-REM Bei Erfolg schliesst sich dieses Fenster, auch beim Doppelklick: Backrec
-REM meldet sich mit seinem eigenen Fenster, und eine Konsole daneben sieht nach
-REM einem offenen Punkt aus.
+REM On success this window closes, even on a double click: Backrec reports with
+REM a window of its own, and a console beside it looks like an open issue.
 if "%EXITCODE%"=="0" goto :raus
 echo.
 pause
