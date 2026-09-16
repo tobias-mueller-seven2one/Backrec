@@ -210,9 +210,9 @@ Die Diagnose MUST für Aufnahme- und Zielverzeichnis prüfen, ob sie existieren 
 - **WHEN** das Aufnahmeverzeichnis unterhalb eines Cloud-synchronisierten Ordners liegt
 - **THEN** meldet die Diagnose eine Warnung mit diesem Umstand als Ursache
 
-### Requirement: Prüfung von Verknüpfung und Zustand
+### Requirement: Prüfung von Verknüpfung, Zustand und Berichten
 
-Die Diagnose MUST melden, ob eine Desktop-Verknüpfung vorhanden ist, ob sie auf dieses Repository zeigt und ob ihr Ziel existiert. Sie MUST melden, ob das Protokollverzeichnis beschreibbar ist und ob verwaiste Zustandsdatensätze vorliegen. Ein verwaister Zustandsdatensatz MUST als Warnung gemeldet werden, nicht als Fehler. Sie MUST die eingerichtete Version nennen und als Warnung melden, wenn ein Ordner einer abgelösten Version aus einer Aktualisierung liegen geblieben ist oder wenn sich Diagnose-Berichte über eine festgelegte Anzahl hinaus angesammelt haben; in beiden Fällen MUST sie den Weg zum Aufräumen nennen und MUST NOT selbst aufräumen.
+Die Diagnose MUST melden, ob eine Desktop-Verknüpfung vorhanden ist, ob sie auf dieses Repository zeigt und ob ihr Ziel existiert. Sie MUST melden, ob das Protokollverzeichnis beschreibbar ist und ob verwaiste Zustandsdatensätze vorliegen. Ein verwaister Zustandsdatensatz MUST als Warnung gemeldet werden, nicht als Fehler. Sie MUST die eingerichtete Fassung nennen und als Warnung melden, wenn sich Diagnose-Berichte über eine festgelegte Anzahl hinaus angesammelt haben; sie MUST dabei den Weg zum Aufräumen nennen und MUST NOT selbst aufräumen. Sie MUST NOT die Nachbarordner des Repositorys prüfen.
 
 #### Scenario: Verknüpfung zeigt auf ein anderes Repository
 
@@ -230,17 +230,22 @@ Die Diagnose MUST melden, ob eine Desktop-Verknüpfung vorhanden ist, ob sie auf
 - **WHEN** das Protokollverzeichnis nicht beschreibbar ist
 - **THEN** meldet die Diagnose einen Fehler mit dem Pfad
 
-#### Scenario: Ordner einer abgelösten Version
+#### Scenario: Nachbarordner werden nicht betrachtet
 
-- **WHEN** neben dem Repository der Ordner einer durch eine Aktualisierung abgelösten Version liegt
-- **THEN** meldet die Diagnose eine Warnung mit dem Pfad
-- **AND** sie entfernt ihn nicht selbst
+- **WHEN** neben dem Repository ein beliebiger weiterer Ordner liegt
+- **THEN** erzeugt die Diagnose dazu keine Prüfung und keine Meldung
 
 #### Scenario: Angesammelte Diagnose-Berichte
 
 - **WHEN** im Protokollverzeichnis mehr Diagnose-Berichte liegen als die festgelegte Anzahl
 - **THEN** meldet die Diagnose eine Warnung mit der Anzahl
 - **AND** sie nennt das Löschen als nächsten Schritt
+
+#### Scenario: Eingerichtete Fassung wird genannt
+
+- **WHEN** die Diagnose läuft
+- **THEN** nennt sie die eingerichtete Fassung als Auskunft
+- **AND** sie vergleicht sie mit keiner anderen Fassung
 
 ### Requirement: Prüfung auf veraltete Verknüpfungen auf dem Desktop
 

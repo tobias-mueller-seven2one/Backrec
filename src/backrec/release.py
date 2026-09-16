@@ -4,10 +4,10 @@ The colleagues' machines have no Git and no checkout. What ships is a ZIP that
 Tobias builds, with exactly one folder as its top level so that "Extract all"
 yields a clean folder instead of two dozen files in Downloads.
 
-The file selection is an **allow list over `git ls-files`** plus the two files
-the build itself produces (design D18). An exclusion list only ever knows what
-someone thought of; everything versioned is by definition reviewed content, and
-nothing that grew locally can slip in behind it.
+The file selection is an **allow list over `git ls-files`** (design D18). An
+exclusion list only ever knows what someone thought of; everything versioned is
+by definition reviewed content, and nothing that grew locally can slip in behind
+it.
 
 Four checks run before packing, and every one of them aborts hard rather than
 warning:
@@ -29,24 +29,19 @@ once it sits in a chat channel.
 from __future__ import annotations
 
 import fnmatch
-import hashlib
-import json
 import os
 import re
 import subprocess
 import zipfile
-from dataclasses import dataclass, field
-from datetime import date
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Sequence
 
 from . import paths
 from .console import contains_forbidden
 from .logging_setup import get_logger
 
 logger = get_logger(__name__)
-
-MANIFEST_NAME = paths.INSTALLED_MANIFEST_NAME
 
 LOCK_CHECK_TIMEOUT_SECONDS = 180
 
@@ -86,7 +81,6 @@ EXCLUDED_PATTERNS: tuple[str, ...] = (
     "config*.json",
     "config.toml",
     ".env",
-    MANIFEST_NAME,
     # Tobias' list of hand acceptances (convention section 10a). It names
     # internal tasks and specs and has no business on a colleague's machine.
     "ABNAHME.md",
@@ -133,7 +127,7 @@ TEXT_SUFFIXES: tuple[str, ...] = (
 GUIDE_MAX_LINES = 40
 GUIDE_MAX_LINE_LENGTH = 80
 
-# The eight sections in their fixed order (design D22). The first and the last
+# The seven sections in their fixed order (design D22). The first and the last
 # are header and closing line and are recognised by their content.
 GUIDE_SECTIONS: tuple[str, ...] = (
     paths.TOOL_NAME,
@@ -141,7 +135,6 @@ GUIDE_SECTIONS: tuple[str, ...] = (
     "So richtest du es ein",
     "Im Alltag",
     "Wenn etwas rot ist",
-    "Aktualisieren",
     "Entfernen",
     "Tobias",
 )
@@ -172,17 +165,9 @@ class ReleaseError(RuntimeError):
 
 
 @dataclass(frozen=True)
-class ManifestEntry:
-    path: str
-    sha256: str
-    size: int
-
-
-@dataclass(frozen=True)
 class ReleaseResult:
     archive: Path
     version: str
-    entries: tuple[ManifestEntry, ...] = field(default_factory=tuple)
 
 
 # --- File selection -----------------------------------------------------------
@@ -483,43 +468,7 @@ def check_guide(path: Path) -> None:
             )
 
 
-# --- Manifest and archive -----------------------------------------------------
-
-
-def file_digest(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(65536), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def build_manifest(root: Path, files: Iterable[Path], version: str) -> dict[str, object]:
-    entries = [
-        {
-            "path": relative.as_posix(),
-            "sha256": file_digest(root / relative),
-            "size": (root / relative).stat().st_size,
-        }
-        for relative in files
-    ]
-    return {
-        "tool": paths.TOOL_NAME,
-        "version": version,
-        "created": date.today().isoformat(),
-        "files": entries,
-    }
-
-
-def manifest_entries(manifest: dict[str, object]) -> tuple[ManifestEntry, ...]:
-    raw = manifest.get("files")
-    if not isinstance(raw, list):
-        return ()
-    return tuple(
-        ManifestEntry(path=str(item["path"]), sha256=str(item["sha256"]), size=int(item["size"]))
-        for item in raw
-        if isinstance(item, dict) and {"path", "sha256", "size"} <= set(item)
-    )
+# --- Archive ------------------------------------------------------------------
 
 
 def build(
@@ -544,9 +493,6 @@ def build(
     check_user_paths(source, files)
     check_secrets(source, files)
 
-    manifest = build_manifest(source, files, version)
-    manifest_text = json.dumps(manifest, indent=2, ensure_ascii=False)
-
     target_dir = output_dir or paths.releases_dir()
     target_dir.mkdir(parents=True, exist_ok=True)
     archive = target_dir / f"{paths.TOOL_NAME}-{version}.zip"
@@ -554,7 +500,6 @@ def build(
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
         for relative in files:
             bundle.write(source / relative, f"{paths.TOOL_NAME}/{relative.as_posix()}")
-        bundle.writestr(f"{paths.TOOL_NAME}/{MANIFEST_NAME}", manifest_text)
 
     logger.info("Archiv gebaut: %s", archive)
-    return ReleaseResult(archive=archive, version=version, entries=manifest_entries(manifest))
+    return ReleaseResult(archive=archive, version=version)

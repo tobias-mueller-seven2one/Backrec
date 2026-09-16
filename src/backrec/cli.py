@@ -63,19 +63,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--purge", action="store_true", help="Auch Einstellungen, Aufzeichnungen und Zustand"
     )
 
-    update_parser = subparsers.add_parser("update", help="Aktualisieren (Exit 0, sonst 1)")
-    update_parser.add_argument(
-        "archive", nargs="?", type=Path, default=None, help="Pfad zum Archiv"
-    )
-    update_parser.add_argument(
-        "--git", action="store_true", help="Entwicklerweg über die Versionsverwaltung"
-    )
-    update_parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Auch eine gleiche oder ältere Fassung einspielen",
-    )
-
     logs_parser = subparsers.add_parser("logs", help="Aufzeichnungen (Exit 0, sonst 1)")
     logs_parser.add_argument("--follow", action="store_true", help="Neue Zeilen anzeigen")
 
@@ -142,6 +129,13 @@ def _command_stop(args: argparse.Namespace) -> int:
     result = control.stop(
         on_progress=lambda remaining: ui.note(f"Warte noch bis zu {int(remaining)} Sekunden ...")
     )
+
+    if result.stopped and result.forced:
+        # Ended, so exit 0 - but not an "alles gut": the message names a closing
+        # sequence that was cut off and the folder its takes are in, and that
+        # has to read as a warning rather than as a tick.
+        ui.warn(result.message)
+        return 0
 
     if result.stopped:
         ui.ok(result.message)
@@ -225,25 +219,6 @@ def _command_uninstall(args: argparse.Namespace) -> int:
     return result.code
 
 
-def _command_update(args: argparse.Namespace) -> int:
-    ui = _ui()
-
-    if args.git:
-        result = control.update_from_git()
-        _emit(ui, result.lines)
-        return result.code
-
-    if args.archive is None:
-        ui.note("So spielst du eine neue Fassung ein:")
-        ui.note("  Das neue Archiv über den Ordner entpacken und Setup.cmd doppelklicken.")
-        ui.note("Wer es von hier aus tun will, gibt das Archiv als Angabe mit.")
-        return 0
-
-    result = control.apply_archive(args.archive, detached=False, allow_older=args.force)
-    _emit(ui, result.lines)
-    return result.code
-
-
 def _command_logs(args: argparse.Namespace) -> int:
     ui = _ui()
     result = control.follow_logs() if args.follow else control.open_logs()
@@ -277,7 +252,6 @@ _COMMANDS = {
     "doctor": _command_doctor,
     "shortcut": _command_shortcut,
     "uninstall": _command_uninstall,
-    "update": _command_update,
     "logs": _command_logs,
     "release": _command_release,
     "about": _command_about,

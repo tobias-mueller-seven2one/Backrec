@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+import time
 
 import psutil
+import pytest
 
 from backrec import instance, paths
 
@@ -113,6 +115,72 @@ def test_the_stop_request_is_a_file_that_can_be_taken_back():
 
     instance.clear_stop_request()
     assert not instance.stop_requested()
+
+
+# --- The sign of life of the closing sequence ---------------------------------
+
+
+def test_a_written_beat_is_read_back():
+    assert instance.finishing_beat() is None
+    assert not instance.is_finishing()
+
+    instance.mark_finishing(7)
+
+    assert instance.finishing_beat() == 7
+    assert instance.is_finishing()
+
+    instance.clear_finishing()
+    assert instance.finishing_beat() is None
+
+
+def test_an_unreadable_sign_of_life_counts_as_none():
+    """A stop consulting this file must never fail because of it."""
+    paths.finishing_marker_path().parent.mkdir(parents=True, exist_ok=True)
+    paths.finishing_marker_path().write_text("kein Takt", encoding="utf-8")
+
+    assert instance.finishing_beat() is None
+
+
+def test_clearing_a_sign_of_life_that_is_not_there_is_harmless():
+    instance.clear_finishing()
+    instance.clear_finishing()
+
+
+def test_the_beacon_keeps_beating_and_takes_its_file_with_it():
+    with instance.FinishingBeacon(interval_seconds=0.01):
+        first = instance.finishing_beat()
+        assert first is not None
+
+        deadline = time.monotonic() + 2.0
+        while time.monotonic() < deadline:
+            current = instance.finishing_beat()
+            if current is not None and current > first:
+                break
+            time.sleep(0.01)
+
+        assert current is not None and current > first, "der Takt steht still"
+
+    assert instance.finishing_beat() is None
+
+
+def test_the_beacon_ends_its_sign_of_life_after_a_failure():
+    """Success and failure leave the closing sequence through the same door."""
+    with pytest.raises(RuntimeError):
+        with instance.FinishingBeacon(interval_seconds=0.01):
+            assert instance.is_finishing()
+            raise RuntimeError("kaputt")
+
+    assert not instance.is_finishing()
+
+
+def test_the_beacon_never_ends_the_work_it_only_describes(monkeypatch):
+    def refuse(_beat, _path=None):
+        raise OSError("Datentraeger voll")
+
+    monkeypatch.setattr(instance, "mark_finishing", refuse)
+
+    with instance.FinishingBeacon(interval_seconds=0.01):
+        pass
 
 
 def test_the_window_search_survives_a_machine_without_the_windows_api(monkeypatch):

@@ -36,6 +36,6 @@ Keine. Alle sechs Fähigkeiten bestehen bereits.
 ## Impact
 
 - Code: `src/backrec/app.py` (Menü, Zahnrad, Tooltip, Sperrlogik entfallen; Statuszeile wird klickbar), `src/backrec/control.py` (`_closing_note`), `src/backrec/cli.py` (nur prüfen, keine Änderung erwartet).
-- Dokumente: `LIES-MICH-ZUERST.txt`, `README.md`, `ABNAHME.md`.
+- Dokumente: `LIES-MICH-ZUERST.txt`, `README.md`, die Handabnahme (seit 15.09.2026 suite-weit geführt, nicht mehr im Repo).
 - Tests: `tests/test_app.py` (Menü-Tests entfallen, Tests der Statuszeile kommen hinzu), `tests/test_docs.py` (Anleitungsprüfung), `tests/test_setup.py` (Abschlusssatz).
 - Nicht betroffen: Aufnahme, Mischung, Ablage, Diagnoseprüfungen, Verknüpfung, Release-Bau, die vier Nachbarwerkzeuge.

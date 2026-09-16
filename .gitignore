@@ -37,8 +37,7 @@ config.toml
 # Desktop shortcuts are built per machine and carry absolute paths (design D14).
 *.lnk
 
-# Release artefacts and the staging folder of an update (design D17, D18).
-release-manifest.json
+# Release artefacts (design D18).
 *.zip
 
 # uv writes the environment and its caches here.

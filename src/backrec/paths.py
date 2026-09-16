@@ -16,7 +16,7 @@ import os
 from pathlib import Path
 from typing import Mapping
 
-from .version import UNKNOWN as UNKNOWN_VERSION, VERSION_FILE_NAME, is_newer, parse_version, read_version
+from .version import UNKNOWN as UNKNOWN_VERSION, VERSION_FILE_NAME, parse_version, read_version
 
 TOOL_NAME = "Backrec"
 SUITE_DIR_NAME = "MemoSuite"
@@ -35,8 +35,8 @@ GUIDE_FILE_NAME = "LIES-MICH-ZUERST.txt"
 PID_RECORD_NAME = "backrec.pid"
 STOP_REQUEST_NAME = "stop.request"
 RECORDING_MARKER_NAME = "recording.active"
+FINISHING_MARKER_NAME = "finishing.active"
 INSTALLED_RECORD_NAME = "installed.json"
-INSTALLED_MANIFEST_NAME = "release-manifest.json"
 
 LOG_FILE_NAME = "backrec.log"
 
@@ -169,12 +169,19 @@ def recording_marker_path(env: Mapping[str, str] | None = None) -> Path:
     return state_dir(env) / RECORDING_MARKER_NAME
 
 
+def finishing_marker_path(env: Mapping[str, str] | None = None) -> Path:
+    """Says that the closing sequence is still working - readable from outside.
+
+    Separate from `recording_marker_path`: that one answers "is sound being
+    recorded", this one answers "is the application still busy". The two part
+    ways in the middle of the closing sequence, where the recording has ended
+    and the longest step - mixing - is still to come (design D1).
+    """
+    return state_dir(env) / FINISHING_MARKER_NAME
+
+
 def installed_record_path(env: Mapping[str, str] | None = None) -> Path:
     return state_dir(env) / INSTALLED_RECORD_NAME
-
-
-def installed_manifest_path(env: Mapping[str, str] | None = None) -> Path:
-    return state_dir(env) / INSTALLED_MANIFEST_NAME
 
 
 def suite_handshake_path(env: Mapping[str, str] | None = None) -> Path:
@@ -240,7 +247,6 @@ __all__ = [
     "VERSION_FILE_NAME",
     "UNKNOWN_VERSION",
     "CLOUD_VARIABLE",
-    "INSTALLED_MANIFEST_NAME",
     "REPO_MARKERS",
     "has_repo_marker",
     "repo_root",
@@ -254,8 +260,8 @@ __all__ = [
     "pid_record_path",
     "stop_request_path",
     "recording_marker_path",
+    "finishing_marker_path",
     "installed_record_path",
-    "installed_manifest_path",
     "suite_handshake_path",
     "example_config_path",
     "legacy_config_path",
@@ -266,5 +272,4 @@ __all__ = [
     "expand_path",
     "read_version",
     "parse_version",
-    "is_newer",
 ]

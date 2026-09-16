@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import subprocess
 from dataclasses import is_dataclass
 from pathlib import Path
 
-from backrec import control, instance, paths, shortcut as shortcut_module
+from backrec import control, instance, merge, paths, shortcut as shortcut_module
 from backrec.wizard import write_config
 
 
@@ -183,6 +184,238 @@ def test_stop_clears_a_left_over_request(tmp_path: Path) -> None:
     assert not instance.stop_requested()
 
 
+# --- The deadline that follows the closing sequence ---------------------------
+
+
+class Clock:
+    """A stand-in for `time` inside `control` - the deadline is under test.
+
+    Every `sleep` moves the clock by what it was asked to wait for, so a
+    simulated five minutes cost no real time at all.
+    """
+
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def monotonic(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.now += seconds
+
+
+class FakeProcess:
+    def __init__(self, clock: Clock, ends_at: float | None) -> None:
+        self.pid = 4242
+        self._clock = clock
+        self.ends_at = ends_at
+
+    def is_running(self) -> bool:
+        return self.ends_at is None or self._clock.now < self.ends_at
+
+
+def _stopping(
+    monkeypatch,
+    *,
+    ends_at: float | None = None,
+    beats_until: float | None = None,
+) -> tuple[Clock, FakeProcess, list[object]]:
+    """A stop against a stand-in process, on a clock nobody has to wait for.
+
+    `beats_until` is how long the application keeps reporting work; the beat
+    changes once per simulated second, which is what `FINISHING_BEAT_SECONDS`
+    asks of it.
+    """
+    clock = Clock()
+    process = FakeProcess(clock, ends_at)
+    terminated: list[object] = []
+
+    monkeypatch.setattr(control, "time", clock)
+    monkeypatch.setattr(control.instance, "running_instance", lambda **_kwargs: process)
+    monkeypatch.setattr(control.instance, "request_stop", lambda: None)
+    monkeypatch.setattr(control.instance, "clear_stop_request", lambda: None)
+    monkeypatch.setattr(control.instance, "clear_record", lambda: None)
+    monkeypatch.setattr(control.instance, "clear_recording", lambda: None)
+    monkeypatch.setattr(control.instance, "clear_finishing", lambda: None)
+
+    def beat() -> int | None:
+        if beats_until is None or clock.now > beats_until:
+            return None
+        return int(clock.now / instance.FINISHING_BEAT_SECONDS)
+
+    monkeypatch.setattr(control.instance, "finishing_beat", beat)
+
+    def terminate(target, **_kwargs) -> list[int]:
+        terminated.append(target)
+        target.ends_at = clock.now
+        return [target.pid]
+
+    monkeypatch.setattr(control.instance, "terminate_tree", terminate)
+    return clock, process, terminated
+
+
+def test_a_closing_sequence_longer_than_the_base_deadline_is_not_cut_off(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """The whole point (design D1).
+
+    Two minutes of mixing and copying used to run into a thirty-second deadline.
+    As long as the application keeps reporting work, the wait goes on.
+    """
+    repo = _installed_repo(tmp_path)
+    clock, _process, terminated = _stopping(monkeypatch, ends_at=100.0, beats_until=99.0)
+
+    result = control.stop(repo)
+
+    assert terminated == [], "kein hartes Beenden"
+    assert not result.forced
+    assert result.stopped
+    assert clock.now >= 100.0, "es wurde tatsaechlich ueber die Grundfrist hinaus gewartet"
+
+
+def test_a_stop_without_a_closing_sequence_waits_no_longer_than_before(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Without a beat there is no extension - the base deadline is untouched."""
+    repo = _installed_repo(tmp_path)
+    clock, _process, terminated = _stopping(monkeypatch, ends_at=None, beats_until=None)
+
+    result = control.stop(repo)
+
+    assert clock.now == control.STOP_TIMEOUT_SECONDS
+    assert result.forced
+    assert len(terminated) == 1
+
+
+def test_a_stop_of_an_application_that_ends_at_once_terminates_nothing(
+    tmp_path: Path, monkeypatch
+) -> None:
+    repo = _installed_repo(tmp_path)
+    clock, _process, terminated = _stopping(monkeypatch, ends_at=0.0)
+
+    result = control.stop(repo)
+
+    assert clock.now == 0.0
+    assert terminated == []
+    assert not result.forced
+
+
+def test_a_single_beat_never_shortens_the_base_deadline(tmp_path: Path, monkeypatch) -> None:
+    """The grace is shorter than the base deadline and must not replace it."""
+    repo = _installed_repo(tmp_path)
+    clock, _process, _terminated = _stopping(monkeypatch, ends_at=None, beats_until=1.0)
+
+    control.stop(repo)
+
+    assert clock.now == control.STOP_TIMEOUT_SECONDS
+
+
+def test_a_beat_that_never_stops_ends_at_the_ceiling(tmp_path: Path, monkeypatch) -> None:
+    """A hanging process must not block for ever (design D4)."""
+    repo = _installed_repo(tmp_path)
+    clock, _process, terminated = _stopping(monkeypatch, ends_at=None, beats_until=1_000_000.0)
+
+    result = control.stop(repo)
+
+    assert clock.now == control.STOP_LIMIT_SECONDS
+    assert result.forced
+    assert len(terminated) == 1
+
+
+def test_the_ceiling_covers_mixing_the_recorder_threads_and_a_copy() -> None:
+    """The two numbers used to be maintained in two modules without a link.
+
+    That, not the value itself, was the fault: the comment above the deadline
+    claimed the cover, and nothing ever checked the sum (design D6).
+    """
+    recorder_threads = 2 * 5.0
+    copy_reserve = 60.0
+
+    assert (
+        control.STOP_LIMIT_SECONDS
+        > merge.MERGE_TIMEOUT_SECONDS + recorder_threads + copy_reserve
+    )
+    assert control.STOP_LIMIT_SECONDS > control.STOP_TIMEOUT_SECONDS
+    assert control.STOP_GRACE_SECONDS < control.STOP_TIMEOUT_SECONDS
+
+
+# --- What a forced stop says --------------------------------------------------
+
+
+class Collected(logging.Handler):
+    """The package's own logger does not propagate once it is configured.
+
+    Hanging a handler on it directly is the only way to read what it wrote that
+    does not depend on whichever test ran before this one.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(level=logging.ERROR)
+        self.messages: list[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.messages.append(record.getMessage())
+
+
+def test_a_forced_stop_names_the_folder_the_raw_takes_stay_in(
+    tmp_path: Path, repo: Path, config_values: dict[str, str], monkeypatch
+) -> None:
+    """Without this nobody ever learns that a recording was cut off."""
+    installed = _installed_repo(tmp_path)
+    write_config(paths.config_path(), config_values, repo=repo)
+    recording_dir = Path(config_values["recording_dir"])
+    recording_dir.mkdir(parents=True, exist_ok=True)
+    takes = [recording_dir / "mic_2026.wav", recording_dir / "system_2026.wav"]
+    for take in takes:
+        take.write_bytes(b"Rohspur")
+
+    _stopping(monkeypatch, ends_at=None, beats_until=1_000_000.0)
+    collected = Collected()
+    package_logger = logging.getLogger("backrec")
+    package_logger.addHandler(collected)
+    try:
+        result = control.stop(installed)
+    finally:
+        package_logger.removeHandler(collected)
+
+    assert result.forced
+    assert result.raw_takes == str(recording_dir)
+    assert str(recording_dir) in result.message
+    assert "abgeschnitten" in result.message
+    assert any(str(recording_dir) in message for message in collected.messages)
+    assert all(take.is_file() for take in takes), "die Rohspuren bleiben unangetastet"
+
+
+def test_a_forced_stop_without_a_closing_sequence_still_points_at_the_folder(
+    tmp_path: Path, repo: Path, config_values: dict[str, str], monkeypatch
+) -> None:
+    """A process hanging mid-recording leaves two half-written takes there too."""
+    installed = _installed_repo(tmp_path)
+    write_config(paths.config_path(), config_values, repo=repo)
+    _stopping(monkeypatch, ends_at=None, beats_until=None)
+
+    result = control.stop(installed)
+
+    assert result.forced
+    assert result.raw_takes == config_values["recording_dir"]
+    assert "abgeschnitten" not in result.message
+    assert config_values["recording_dir"] in result.message
+
+
+def test_a_forced_stop_reports_even_without_readable_settings(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A stop that failed over the settings file would be the worst cure."""
+    installed = _installed_repo(tmp_path)
+    _stopping(monkeypatch, ends_at=None, beats_until=None)
+
+    result = control.stop(installed)
+
+    assert result.forced
+    assert result.raw_takes is None
+    assert "Frist" in result.message
+
+
 # --- Status -------------------------------------------------------------------
 
 
@@ -334,166 +567,6 @@ def test_no_second_installation_means_no_note(tmp_path: Path) -> None:
     instance.clear_record()
 
     assert control.status(repo).foreign_folder is None
-
-
-# --- Update -------------------------------------------------------------------
-
-
-def test_update_from_git_without_version_control_points_at_the_archive(tmp_path: Path) -> None:
-    repo = _installed_repo(tmp_path)
-
-    result = control.update_from_git(repo)
-
-    assert not result.ok
-    assert "Setup.cmd" in " ".join(result.lines)
-
-
-def test_a_broken_archive_changes_nothing(tmp_path: Path) -> None:
-    repo = _installed_repo(tmp_path)
-    broken = tmp_path / "kaputt.zip"
-    broken.write_bytes(b"kein Archiv")
-
-    result = control.apply_archive(broken, repo, detached=False)
-
-    assert not result.ok
-    assert not (repo.with_name(repo.name + ".update")).exists()
-
-
-def _archive(tmp_path: Path, version: str = "2026.10.1") -> Path:
-    import hashlib
-    import json
-    import zipfile
-
-    from backrec import release
-
-    content = "neu"
-    target = tmp_path / f"Backrec-{version}.zip"
-    with zipfile.ZipFile(target, "w") as bundle:
-        bundle.writestr("Backrec/README.md", content)
-        bundle.writestr(
-            f"Backrec/{release.MANIFEST_NAME}",
-            json.dumps(
-                {
-                    "tool": "Backrec",
-                    "version": version,
-                    "files": [
-                        {
-                            "path": "README.md",
-                            "sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
-                            "size": len(content),
-                        }
-                    ],
-                }
-            ),
-        )
-    return target
-
-
-class FakeProcess:
-    pid = 4242
-
-    def is_running(self) -> bool:
-        return True
-
-
-def test_updating_a_running_instance_hands_over_to_the_helper_outside_the_folder(
-    tmp_path: Path, monkeypatch
-) -> None:
-    repo = _installed_repo(tmp_path)
-    (repo / "scripts" / "win").mkdir(parents=True)
-    (repo / "scripts" / "win" / "apply-update.ps1").write_text("# helfer", encoding="utf-8")
-    launched: list[list[str]] = []
-
-    monkeypatch.setattr(control.instance, "running_instance", lambda **_k: FakeProcess())
-    monkeypatch.setattr(control.subprocess, "Popen", lambda command, **_k: launched.append(command))
-
-    result = control.apply_archive(_archive(tmp_path), repo)
-
-    assert result.ok
-    assert launched
-    assert launched[0][0] == "powershell.exe"
-    assert "-File" in launched[0]
-    assert str(repo / "scripts" / "win" / "apply-update.ps1") in launched[0]
-    assert str(FakeProcess.pid) in launched[0]
-
-
-def test_updating_names_both_versions_before_anything_changes(
-    tmp_path: Path, monkeypatch
-) -> None:
-    repo = _installed_repo(tmp_path)
-    (repo / "scripts" / "win").mkdir(parents=True)
-    (repo / "scripts" / "win" / "apply-update.ps1").write_text("# helfer", encoding="utf-8")
-
-    monkeypatch.setattr(control.instance, "running_instance", lambda **_k: FakeProcess())
-    monkeypatch.setattr(control.subprocess, "Popen", lambda command, **_k: None)
-
-    result = control.apply_archive(_archive(tmp_path), repo)
-
-    joined = " ".join(result.lines)
-    assert "2026.09.1" in joined
-    assert "2026.10.1" in joined
-
-
-def test_a_missing_helper_leaves_the_previous_state_runnable(
-    tmp_path: Path, monkeypatch
-) -> None:
-    repo = _installed_repo(tmp_path)
-    monkeypatch.setattr(control.instance, "running_instance", lambda **_k: FakeProcess())
-
-    result = control.apply_archive(_archive(tmp_path), repo)
-
-    assert not result.ok
-    assert "Setup.cmd" in " ".join(result.lines)
-    assert (repo / ".venv" / "pyvenv.cfg").is_file()
-
-
-def test_an_archive_that_is_not_newer_changes_nothing(tmp_path: Path) -> None:
-    """The specification asks for both versions and an explicit yes first."""
-    repo = _installed_repo(tmp_path)
-
-    result = control.apply_archive(_archive(tmp_path, "2026.08.1"), repo, detached=False)
-
-    joined = " ".join(result.lines)
-    assert not result.ok
-    assert "2026.09.1" in joined
-    assert "2026.08.1" in joined
-    assert not repo.with_name(repo.name + ".update").exists()
-    assert not (repo / "README.md").exists()
-
-
-def test_an_older_archive_goes_in_after_an_explicit_yes(tmp_path: Path) -> None:
-    repo = _installed_repo(tmp_path)
-
-    result = control.apply_archive(
-        _archive(tmp_path, "2026.08.1"), repo, detached=False, allow_older=True
-    )
-
-    assert result.ok
-    assert (repo / "README.md").read_text(encoding="utf-8") == "neu"
-
-
-def test_reading_an_archive_unpacks_nothing(tmp_path: Path) -> None:
-    """The window asks before the first change, so this may not make one."""
-    repo = _installed_repo(tmp_path)
-
-    decision, problem = control.inspect_archive(_archive(tmp_path), repo)
-
-    assert problem == ()
-    assert decision is not None
-    assert decision.installed_version == "2026.09.1"
-    assert decision.info.version == "2026.10.1"
-    assert not repo.with_name(repo.name + ".update").exists()
-
-
-def test_updating_without_a_running_instance_mirrors_right_away(tmp_path: Path) -> None:
-    repo = _installed_repo(tmp_path)
-
-    result = control.apply_archive(_archive(tmp_path), repo, detached=False)
-
-    assert result.ok
-    assert (repo / "README.md").read_text(encoding="utf-8") == "neu"
-    assert not repo.with_name(repo.name + ".update").exists()
-    assert "Setup.cmd" in " ".join(result.lines)
 
 
 # --- About --------------------------------------------------------------------

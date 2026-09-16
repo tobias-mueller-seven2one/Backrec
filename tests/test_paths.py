@@ -41,6 +41,13 @@ def test_the_command_line_beats_the_environment(tmp_path, monkeypatch):
     assert paths.config_path(tmp_path / "von-der-zeile.toml") == tmp_path / "von-der-zeile.toml"
 
 
+def test_the_two_markers_of_the_state_folder_are_different_files():
+    """"Is sound being recorded" and "is the application busy" are two
+    questions, and the closing sequence is where they part (design D1)."""
+    assert paths.finishing_marker_path().parent == paths.state_dir()
+    assert paths.finishing_marker_path() != paths.recording_marker_path()
+
+
 def test_a_foreign_working_directory_changes_nothing(tmp_path, monkeypatch):
     before = paths.repo_root()
     monkeypatch.chdir(tmp_path)
@@ -93,14 +100,12 @@ def test_a_path_value_expands_variables_in_both_spellings(monkeypatch):
     assert paths.expand_path("~").is_absolute()
 
 
-def test_the_version_comes_from_the_file_and_compares_as_numbers(tmp_path):
+def test_the_version_comes_from_the_file_and_has_a_checkable_shape(tmp_path):
     (tmp_path / paths.VERSION_FILE_NAME).write_text("2026.09.2\r\n", encoding="utf-8-sig")
 
     assert version.read_version(tmp_path) == "2026.09.2"
-    assert version.is_newer("2026.10.1", "2026.09.2")
-    assert not version.is_newer("2026.09.2", "2026.10.1")
-    assert not version.is_newer("irgendwas", "2026.09.2")
     assert version.parse_version("2026.09.1") == (2026, 9, 1)
+    assert version.parse_version("irgendwas") is None
 
 
 def test_a_missing_version_file_is_no_reason_to_fail(tmp_path):

@@ -7,6 +7,8 @@ place with the colleague's text, and these tests keep the boundary.
 
 from __future__ import annotations
 
+import pytest
+
 from backrec import control, paths, release
 
 ROOT = paths.repo_root()
@@ -15,7 +17,11 @@ README = (ROOT / "README.md").read_text(encoding="utf-8")
 GUIDE = paths.guide_path(ROOT).read_bytes()[3:].decode("utf-8")
 
 # Developer routes. They belong in the README and nowhere near the guide.
-DEVELOPER_ONLY = ("release", "update --git", "git pull", "pytest", "uv sync")
+DEVELOPER_ONLY = ("release", "pytest", "uv sync")
+
+# Backrec has no way to update itself (decision of 15.09.2026). Neither document
+# describes the subject, and neither offers a substitute for it.
+NO_SELF_UPDATE = ("aktualisier", "Aktualisier", "update", "Update")
 
 
 def test_the_readme_points_at_the_guide_in_its_first_lines() -> None:
@@ -80,12 +86,32 @@ def test_the_guide_names_no_menu_in_the_window() -> None:
         assert absent not in GUIDE
 
 
-def test_the_guide_names_one_way_to_change_a_setting_and_one_to_update() -> None:
-    """Both go through Setup.cmd now - the window carries neither."""
+def test_the_guide_names_one_way_to_change_a_setting() -> None:
+    """It goes through Setup.cmd now - the window carries no menu."""
     everyday = GUIDE.split("Im Alltag")[1].split("Wenn etwas rot ist")[0]
 
     assert "Setup.cmd" in everyday
     assert "Einstellungen ändern" in everyday
+
+
+@pytest.mark.parametrize("absent", NO_SELF_UPDATE)
+def test_neither_document_describes_updating_the_program(absent: str) -> None:
+    """A new state is fetched by downloading the program again.
+
+    That is a deletion followed by an ordinary setup, and both are already
+    described. A chapter explaining that there is no update is still a chapter
+    about updating, so there is no substitute text either.
+    """
+    assert absent not in GUIDE
+    assert absent not in README
+
+
+def test_the_guide_goes_straight_from_the_red_line_to_removing() -> None:
+    """Seven sections, and nothing between those two."""
+    between = GUIDE.split("Wenn etwas rot ist")[1].split("Entfernen")[0]
+
+    assert "Diagnose" in between
+    assert len([line for line in between.splitlines() if line.strip()]) == 2
 
 
 def test_the_guide_carries_the_closing_line_the_convention_asks_for() -> None:

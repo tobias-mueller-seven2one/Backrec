@@ -17,14 +17,12 @@ Im Alltag
   Doppelklick auf das Symbol öffnet ein kleines Fenster.
   REC beginnt die Aufnahme, STOP beendet sie und legt sie für dich ab.
   Einstellungen ändern: Setup.cmd noch einmal doppelklicken. Der Lauf zeigt
-  dir deine Werte und fragt, ob du etwas ändern willst.
+  dir deine Werte und fragt, ob du etwas ändern willst. Läuft Backrec dabei,
+  wird es beendet; am Ende fragt der Lauf, ob er es wieder starten soll.
 
 Wenn etwas rot ist
   Klicke im Fenster oben auf die Statuszeile. Es öffnet sich eine Datei mit
   der Diagnose. Schicke diese Datei an Tobias.
-
-Aktualisieren
-  Neue Fassung über den Ordner entpacken und Setup.cmd erneut doppelklicken.
 
 Entfernen
   Schließe das Fenster.

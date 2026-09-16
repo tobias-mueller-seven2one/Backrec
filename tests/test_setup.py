@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from backrec import control, doctor, external, paths, release, shortcut as shortcut_module, update
+from backrec import control, doctor, external, paths, shortcut as shortcut_module
 from backrec.console import Assistant
 from backrec.wizard import write_config
 
@@ -260,10 +260,10 @@ def test_a_hard_check_failure_ends_with_a_non_zero_code(calm, tmp_path, monkeypa
 
 
 def test_a_demanded_start_happens_even_with_an_open_point(calm, tmp_path, monkeypatch) -> None:
-    """The update helper stopped the application; it has to come back.
+    """A caller who asked for a window has to get one.
 
-    One warning - a folder offline for a moment - would otherwise leave a
-    colleague after an update with no window and no reason for it.
+    One warning - a folder offline for a moment - would otherwise leave the
+    caller with no window at all and no reason for it.
     """
     desktop = Desktop(tmp_path / "Desktop")
     started: list[bool] = []
@@ -280,6 +280,93 @@ def test_a_demanded_start_happens_even_with_an_open_point(calm, tmp_path, monkey
 
     assert started == [True]
     assert result.code == 1
+
+
+# --- The running application --------------------------------------------------
+
+
+def test_a_running_application_is_stopped_before_the_environment_is_built(
+    calm, tmp_path, monkeypatch
+) -> None:
+    """Setup hygiene, not an update step (design D5, revised).
+
+    The bootstrap outside this process replaces the package in the environment
+    an open window took its code from. No version has to change for that, so
+    nothing here compares one.
+    """
+    desktop = Desktop(tmp_path / "Desktop")
+    run_setup(calm, desktop, monkeypatch, unattended=True)
+    version_before = control.read_installed_version()
+
+    events: list[str] = []
+    monkeypatch.setattr(control.instance, "running_instance", lambda **_kwargs: object())
+    monkeypatch.setattr(
+        control,
+        "stop",
+        lambda *_a, **_k: events.append("stop")
+        or control.StopResult(stopped=True, was_running=True),
+    )
+    monkeypatch.setattr(
+        control,
+        "_ensure_environment",
+        lambda ui, repo: events.append("environment") or ui.ok("Umgebung da") or True,
+    )
+
+    result, printed = run_setup(calm, desktop, monkeypatch, unattended=True)
+
+    assert events == ["stop", "environment"]
+    assert "Die laufende Anwendung wird vorher beendet." in printed
+    assert result.version == version_before
+    assert "Fassung" not in printed
+
+
+def test_a_forced_stop_during_the_setup_is_said_out_loud(calm, tmp_path, monkeypatch) -> None:
+    """The route that made this case routine (design D8).
+
+    A colleague double-clicks `Setup.cmd` next to a running recording. Until now
+    a forced stop counted as success here and said nothing at all - and he is
+    exactly the person who would otherwise never learn where his takes are.
+    """
+    desktop = Desktop(tmp_path / "Desktop")
+    monkeypatch.setattr(control.instance, "running_instance", lambda **_kwargs: object())
+    monkeypatch.setattr(
+        control,
+        "stop",
+        lambda *_a, **_k: control.StopResult(
+            stopped=True,
+            was_running=True,
+            forced=True,
+            message=(
+                "Beendet, nach Ablauf der Frist -- die Nachbereitung der Aufnahme wurde "
+                "abgeschnitten. Die Rohspuren liegen in C:\\Aufnahmen."
+            ),
+            raw_takes="C:\\Aufnahmen",
+        ),
+    )
+
+    result, printed = run_setup(calm, desktop, monkeypatch, unattended=True)
+
+    assert "C:\\Aufnahmen" in printed
+    assert "abgeschnitten" in printed
+    assert result.code in (0, 1), "die Einrichtung laeuft weiter"
+
+
+def test_a_setup_without_a_running_application_says_nothing_about_stopping(
+    calm, tmp_path, monkeypatch
+) -> None:
+    desktop = Desktop(tmp_path / "Desktop")
+    stopped: list[str] = []
+    monkeypatch.setattr(
+        control,
+        "stop",
+        lambda *_a, **_k: stopped.append("stop")
+        or control.StopResult(stopped=True, was_running=False),
+    )
+
+    _result, printed = run_setup(calm, desktop, monkeypatch, unattended=True)
+
+    assert stopped == []
+    assert "beendet" not in printed
 
 
 # --- Idempotence --------------------------------------------------------------
@@ -433,20 +520,28 @@ def test_a_foreign_icon_survives_the_setup(calm, tmp_path, monkeypatch) -> None:
 # --- Version change -----------------------------------------------------------
 
 
-def test_a_new_version_names_both_and_keeps_settings_logs_and_state(
+def test_a_changed_version_is_no_event_and_keeps_settings_logs_and_state(
     calm, tmp_path, monkeypatch
 ) -> None:
+    """Backrec has no way to update itself (decision of 15.09.2026).
+
+    A second run on a folder whose version file has moved on is an ordinary
+    second run: it knows nothing about a predecessor, names none, compares
+    none and removes nothing.
+    """
     desktop = Desktop(tmp_path / "Desktop")
     run_setup(calm, desktop, monkeypatch, unattended=True)
     settings = paths.config_path().read_bytes()
     paths.logs_dir().mkdir(parents=True, exist_ok=True)
     (paths.logs_dir() / "backrec.log").write_text("alte Zeilen", encoding="utf-8")
+    (calm / "alt.py").write_text("alt", encoding="utf-8")
 
     (calm / paths.VERSION_FILE_NAME).write_text("2026.10.1\n", encoding="utf-8")
     result, printed = run_setup(calm, desktop, monkeypatch, unattended=True)
 
-    assert result.updated_from == "2026.09.1"
-    assert "2026.09.1" in printed and "2026.10.1" in printed
+    assert result.version == "2026.10.1"
+    assert "2026.09.1" not in printed
+    assert (calm / "alt.py").is_file()
     assert paths.config_path().read_bytes() == settings
     # Appended to, never replaced: the setup writes its own technical lines into
     # the same file.
@@ -464,157 +559,3 @@ def test_the_installed_version_is_recorded_even_with_an_open_point(
 
     assert control.read_installed_version() == "2026.09.1"
 
-
-# --- Removing files of the previous release -----------------------------------
-
-
-def write_manifest(repo: Path, names: list[str]) -> None:
-    entries = tuple(
-        release.ManifestEntry(path=name, sha256="x" * 64, size=1) for name in names
-    )
-    update.write_installed_manifest(entries, "2026.09.1")
-
-
-def test_a_file_of_the_previous_release_is_removed(calm, tmp_path, monkeypatch) -> None:
-    desktop = Desktop(tmp_path / "Desktop")
-    run_setup(calm, desktop, monkeypatch, unattended=True)
-
-    (calm / "alt.py").write_text("alt", encoding="utf-8")
-    write_manifest(calm, ["alt.py", "bleibt.py"])
-    (calm / "bleibt.py").write_text("bleibt", encoding="utf-8")
-    (calm / release.MANIFEST_NAME).write_text(
-        '{"tool": "Backrec", "version": "2026.10.1", "files": '
-        '[{"path": "bleibt.py", "sha256": "y", "size": 1}]}',
-        encoding="utf-8",
-    )
-    (calm / paths.VERSION_FILE_NAME).write_text("2026.10.1\n", encoding="utf-8")
-
-    _result, printed = run_setup(calm, desktop, monkeypatch, unattended=True)
-
-    assert not (calm / "alt.py").exists()
-    assert (calm / "bleibt.py").is_file()
-    assert "nicht mehr benötigte" in printed
-
-
-def test_the_clean_up_never_touches_environment_settings_or_icons(
-    calm, tmp_path, monkeypatch
-) -> None:
-    desktop = Desktop(tmp_path / "Desktop")
-    run_setup(calm, desktop, monkeypatch, unattended=True)
-
-    (calm / "Backrec.lnk").write_bytes(b"lnk")
-    (calm / "config.toml").write_text("meins", encoding="utf-8")
-    write_manifest(calm, ["alt.py"])
-    (calm / release.MANIFEST_NAME).write_text(
-        '{"tool": "Backrec", "version": "2026.10.1", "files": []}', encoding="utf-8"
-    )
-    (calm / paths.VERSION_FILE_NAME).write_text("2026.10.1\n", encoding="utf-8")
-
-    run_setup(calm, desktop, monkeypatch, unattended=True)
-
-    assert (calm / ".venv" / "pyvenv.cfg").is_file()
-    assert (calm / "Backrec.lnk").is_file()
-    assert (calm / "config.toml").read_text(encoding="utf-8") == "meins"
-
-
-def test_a_missing_previous_list_only_skips_the_clean_up(calm, tmp_path, monkeypatch) -> None:
-    desktop = Desktop(tmp_path / "Desktop")
-    run_setup(calm, desktop, monkeypatch, unattended=True)
-    (calm / "fremde-datei.txt").write_text("gehoert mir", encoding="utf-8")
-    (calm / paths.VERSION_FILE_NAME).write_text("2026.10.1\n", encoding="utf-8")
-
-    result, _printed = run_setup(calm, desktop, monkeypatch, unattended=True)
-
-    assert result.ok
-    assert (calm / "fremde-datei.txt").is_file()
-
-
-# --- Migration ----------------------------------------------------------------
-
-
-def test_an_existing_env_is_taken_over_once_and_left_lying(
-    calm, tmp_path, monkeypatch
-) -> None:
-    desktop = Desktop(tmp_path / "Desktop")
-    legacy = calm / paths.LEGACY_CONFIG_FILE_NAME
-    legacy.write_text(
-        f"BACKREC_RECORDING_DIR={tmp_path / 'Alt' / 'Recording'}\n"
-        f"BACKREC_TARGET_DIR={tmp_path / 'Alt' / 'Input'}\n",
-        encoding="utf-8",
-    )
-
-    _result, printed = run_setup(calm, desktop, monkeypatch, unattended=True)
-
-    written = paths.config_path().read_text(encoding="utf-8")
-    assert str(tmp_path / "Alt" / "Recording") in written
-    assert str(tmp_path / "Alt" / "Input") in written
-    assert legacy.is_file()
-    assert str(legacy) in printed
-    assert "wirkt aber nicht mehr" in printed
-
-
-def test_settings_that_were_already_there_still_get_their_folders(
-    calm, tmp_path, monkeypatch
-) -> None:
-    """Neither of the two ways past the wizard would otherwise create them."""
-    desktop = Desktop(tmp_path / "Desktop")
-    recording = tmp_path / "Vorgegeben" / "Recording"
-    target = tmp_path / "Vorgegeben" / "Input"
-    write_config(
-        paths.config_path(), {"recording_dir": str(recording), "target_dir": str(target)}, repo=calm
-    )
-
-    result, _printed = run_setup(calm, desktop, monkeypatch, unattended=True)
-
-    assert result.ok
-    assert recording.is_dir()
-    assert target.is_dir()
-
-
-def test_a_migrated_env_gets_its_folders_too(calm, tmp_path, monkeypatch) -> None:
-    desktop = Desktop(tmp_path / "Desktop")
-    recording = tmp_path / "Alt" / "Recording"
-    target = tmp_path / "Alt" / "Input"
-    (calm / paths.LEGACY_CONFIG_FILE_NAME).write_text(
-        f"BACKREC_RECORDING_DIR={recording}\nBACKREC_TARGET_DIR={target}\n", encoding="utf-8"
-    )
-
-    result, _printed = run_setup(calm, desktop, monkeypatch, unattended=True)
-
-    assert result.ok
-    assert recording.is_dir()
-    assert target.is_dir()
-
-
-def test_folders_that_cannot_be_created_end_the_run(calm, tmp_path, monkeypatch) -> None:
-    desktop = Desktop(tmp_path / "Desktop")
-    blocker = tmp_path / "blocker"
-    blocker.write_text("", encoding="utf-8")
-    write_config(
-        paths.config_path(),
-        {"recording_dir": str(blocker / "Recording"), "target_dir": str(tmp_path / "Input")},
-        repo=calm,
-    )
-
-    result, printed = run_setup(calm, desktop, monkeypatch, unattended=True)
-
-    assert not result.ok
-    assert result.code == 2
-    assert "lassen sich nicht anlegen" in printed
-
-
-def test_an_existing_settings_file_beats_an_old_env(calm, tmp_path, monkeypatch) -> None:
-    desktop = Desktop(tmp_path / "Desktop")
-    (calm / paths.LEGACY_CONFIG_FILE_NAME).write_text(
-        "BACKREC_RECORDING_DIR=D:\\Alt\nBACKREC_TARGET_DIR=D:\\Alt\n", encoding="utf-8"
-    )
-    write_config(
-        paths.config_path(),
-        {"recording_dir": str(tmp_path / "Neu" / "R"), "target_dir": str(tmp_path / "Neu" / "I")},
-        repo=calm,
-    )
-    before = paths.config_path().read_bytes()
-
-    run_setup(calm, desktop, monkeypatch, unattended=True)
-
-    assert paths.config_path().read_bytes() == before

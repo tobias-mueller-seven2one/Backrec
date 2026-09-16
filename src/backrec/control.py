@@ -29,7 +29,6 @@ from . import (
     preflight,
     release as release_module,
     shortcut as shortcut_module,
-    update as update_module,
     wizard,
 )
 from .console import Assistant
@@ -42,23 +41,21 @@ logger = get_logger(__name__)
 # console of its own (see `merge.NO_WINDOW`).
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
-# A console of its own, and only that. Started without one, `powershell.exe`
-# gets no console at all, and Windows PowerShell 5.1 then ends immediately with
-# a success code -- the update would report success, mirror nothing and show
-# nothing. CREATE_NEW_CONSOLE and DETACHED_PROCESS contradict each other (the
-# first asks for a window, the second forbids one), so the flag stands alone.
-# The window is wanted for a second reason: this is the one stretch of the
-# update nobody is watching, and the helper holds it open when something fails.
-CREATE_NEW_CONSOLE = 0x00000010
-
 SETUP_STEPS = 7
 
 START_READY_TIMEOUT_SECONDS = 30.0
 START_POLL_SECONDS = 0.5
 
-# The 30 s of design D10: long enough for threads to end, a mix to run and a
-# copy of a long recording to be verified.
+# Three deadlines, not one. The 30 s of design D10 were promised to cover
+# threads ending, a mix running and a long recording being copied - a sum that
+# was never added up: mixing alone may take `merge.MERGE_TIMEOUT_SECONDS`, four
+# times as long as the deadline above it. So the base deadline stays what it is
+# and now means only what it can mean - the wait for an application that reports
+# nothing. An application that keeps reporting work extends it beat by beat, and
+# the ceiling ends the wait whatever happens (design D1, D4).
 STOP_TIMEOUT_SECONDS = 30.0
+STOP_GRACE_SECONDS = 10.0
+STOP_LIMIT_SECONDS = 300.0
 STOP_POLL_SECONDS = 0.5
 STOP_PROGRESS_SECONDS = 5.0
 
@@ -68,10 +65,9 @@ UV_INSTALL_SCRIPT = f"https://astral.sh/uv/{UV_VERSION}/install.ps1"
 # Deliberately without `--reinstall-package backrec`, even though a plain sync
 # does not notice changed sources of this package. Reinstalling cannot happen
 # from here: this process runs *inside* the environment that would have to be
-# replaced, and Windows does not release a running program file. The two places
-# that can do it stand outside and do: `scripts\win\bootstrap-uv.ps1` before
-# every setup, and the update helper, which calls Setup.cmd and therefore the
-# bootstrap again.
+# replaced, and Windows does not release a running program file. The one place
+# that can do it stands outside and does: `scripts\win\bootstrap-uv.ps1`, which
+# runs before every setup.
 SYNC_COMMAND: tuple[str, ...] = ("uv", "sync", "--locked", "--no-dev", "--no-editable")
 
 # Set by Setup.cmd once the bootstrap has built the environment. Without the
@@ -107,7 +103,6 @@ class SetupResult:
     ok: bool
     code: int
     version: str = ""
-    updated_from: str | None = None
     shortcut_installed: bool = False
     checks: tuple[doctor.Check, ...] = field(default_factory=tuple)
 
@@ -128,6 +123,7 @@ class StopResult:
     was_running: bool
     forced: bool = False
     message: str = ""
+    raw_takes: str | None = None
 
 
 @dataclass(frozen=True)
@@ -333,6 +329,41 @@ def _ensure_uv(assistant: Assistant) -> bool:
     assistant.note(f"Über die Windows-Paketverwaltung: {short_reason(winget)}.")
     assistant.note(f"Über den zweiten Weg: {short_reason(fallback)}.")
     return False
+
+
+def _stop_running_application(assistant: Assistant, repo: Path) -> None:
+    """Unconditional stop before anything touches the environment (design D5).
+
+    Hygiene of the setup, no routine of its own: whoever replaces the
+    environment must not leave anything running out of it. The one place that
+    replaces it stands outside - `scripts\\win\\bootstrap-uv.ps1` runs
+    before every setup and replaces the package inside `.venv` with
+    `--reinstall-package backrec`; an application that took its code from there
+    keeps running on code that no longer exists on disk, and nothing on screen
+    says so. No version is read and none is compared - a run on an unchanged
+    version replaces the same files as any other.
+
+    The side effect is deliberate: a colleague who double-clicks `Setup.cmd`
+    next to an open window always loses that window, and step 7 offers the
+    start again.
+    """
+    if instance.running_instance(repo=repo) is None:
+        return
+
+    assistant.note("Die laufende Anwendung wird vorher beendet.")
+    outcome = stop(repo)
+    if not outcome.stopped:
+        assistant.warn(outcome.message)
+        return
+
+    # A forced stop counted as success here and said nothing - on exactly the
+    # route that made this case routine: `Setup.cmd` next to a running
+    # recording. The colleague this concerns is the one who would otherwise
+    # never learn that his recording was cut off, nor where its takes are
+    # (design D8). Not a reason to abort: the application is gone, the
+    # environment can be replaced, and stopping here would help nobody.
+    if outcome.forced:
+        assistant.warn(outcome.message)
 
 
 def _discard_broken_environment(repo: Path) -> bool:
@@ -632,8 +663,7 @@ def _offer_start(
     """Step 7: start, offer to start, or leave it.
 
     An unattended run asks nothing and starts nothing unless the caller demands
-    it. The update helper does demand it: otherwise the tool would shut down for
-    the new version and never come back.
+    it - a script that wants a window at the end says so.
     """
     if unattended and not start_after:
         assistant.ok("Alles bereit")
@@ -693,28 +723,16 @@ def setup(
 
     ui.header(paths.TOOL_NAME, version, "Einrichten -- das dauert ein paar Minuten.")
 
-    previous = read_installed_version()
-    updating = previous is not None and previous != version
-    if updating:
-        ui.note(f"Es ist eine neue Fassung da: von {previous} auf {version}.")
-        if instance.running_instance(repo=root) is not None:
-            ui.note("Die laufende Anwendung wird vorher beendet.")
-            stop(root)
-
     ui.step(1, "Hilfsprogramme")
     if not _ensure_uv(ui):
         ui.summary(paths.log_path())
         return SetupResult(ok=False, code=2, version=version)
 
     ui.step(2, "Arbeitsumgebung")
+    _stop_running_application(ui, root)
     if not _ensure_environment(ui, root):
         ui.summary(paths.log_path())
         return SetupResult(ok=False, code=2, version=version)
-
-    if updating:
-        removed = _remove_stale_files(root)
-        if removed:
-            ui.note(f"{removed} nicht mehr benötigte Datei(en) entfernt.")
 
     ui.step(3, "Einstellungen")
     if not _configure(ui, unattended, target, root):
@@ -743,19 +761,16 @@ def setup(
     # deliberately not only after a completely clean run: the record states
     # which version is installed, and that holds whether or not ffmpeg happens
     # to answer right now. Tied to the check result, a colleague with an open
-    # point would never get one, and the next update would have no yardstick
-    # for the files that went away.
+    # point would never get one.
     write_installed_version(version)
-    update_module.store_manifest_from_repo(root)
 
     everything_ok = externals_ready and doctor_ok
     if not everything_ok:
         ui.warn("Noch nicht startklar -- die offenen Punkte stehen oben")
 
     # An open point holds the offer back, but never a start that was demanded.
-    # The update helper demands one: it stopped the application for the new
-    # version, and a single warning - a cloud folder offline, a report too many -
-    # would otherwise leave a colleague with no window at all and no idea why.
+    # A single warning - a cloud folder offline, a report too many - would
+    # otherwise leave a caller who asked for a window with none and no idea why.
     # The start runs its own check and says so if it cannot.
     if offer_start and (everything_ok or start_after):
         _offer_start(ui, root, target, unattended=unattended, start_after=start_after)
@@ -766,30 +781,9 @@ def setup(
         ok=everything_ok,
         code=0 if everything_ok else 1,
         version=version,
-        updated_from=previous if updating else None,
         shortcut_installed=shortcut_installed,
         checks=tuple(checks),
     )
-
-
-def _remove_stale_files(repo: Path) -> int:
-    """Remove files of the previous version that the new one no longer has."""
-    previous = update_module.read_installed_manifest()
-    current_manifest = repo / release_module.MANIFEST_NAME
-    if not previous or not current_manifest.is_file():
-        logger.info("Kein Vergleichsmassstab vorhanden -- Aufraeumen entfaellt")
-        return 0
-
-    try:
-        current = release_module.manifest_entries(
-            json.loads(current_manifest.read_text(encoding="utf-8"))
-        )
-    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
-        return 0
-
-    removed = update_module.remove_stale(repo, update_module.stale_files(previous, current))
-    update_module.write_installed_manifest(current, paths.tool_version(repo))
-    return len(removed)
 
 
 # --- Start, stop, status ------------------------------------------------------
@@ -883,6 +877,47 @@ def start(repo: Path | None = None, config_path: Path | None = None) -> StartRes
     )
 
 
+def _recording_folder(config_path: Path | None = None) -> str | None:
+    """The folder the raw takes stay in, named when a stop had to be forced.
+
+    Never a reason to fail: a stop that ended because the settings file could
+    not be read would be the worst possible cure. Without the folder the forced
+    termination is still reported - only without the one detail that says where
+    to look (design D7).
+    """
+    try:
+        settled = config_module.load_config(paths.config_path(config_path))
+    except (config_module.ConfigError, OSError):
+        logger.warning("Aufnahmeordner nicht ermittelbar -- die Meldung nennt ihn nicht")
+        return None
+
+    return str(settled.recording_dir)
+
+
+def _forced_message(finishing: bool, raw_takes: str | None) -> str:
+    """What a forced termination says to whoever asked for the stop.
+
+    The tone differs by what was observed, the folder does not. An application
+    that hung without ever starting its closing sequence can just as well have
+    hung in the middle of a recording, and then two half-written takes lie in
+    exactly the same place.
+    """
+    head = (
+        "Beendet, nach Ablauf der Frist -- die Nachbereitung der Aufnahme wurde abgeschnitten."
+        if finishing
+        else "Beendet, nach Ablauf der Frist."
+    )
+    if raw_takes is None:
+        return head
+
+    whereabouts = (
+        f"Die Rohspuren liegen in {raw_takes}."
+        if finishing
+        else f"Falls eine Aufnahme lief, liegen ihre Rohspuren in {raw_takes}."
+    )
+    return f"{head} {whereabouts}"
+
+
 def stop(
     repo: Path | None = None,
     *,
@@ -894,6 +929,13 @@ def stop(
     Success is measured on the processes, not on the request that was written.
     Removing the record while the application is still running would make it
     untraceable, and the next start would consider it stopped.
+
+    The deadline follows the application rather than a fixed number: every beat
+    of `instance.finishing_beat` that differs from the one seen before pushes it
+    out by `STOP_GRACE_SECONDS`, up to `STOP_LIMIT_SECONDS`. It is never pulled
+    in below the base deadline, and without a single beat it is the base
+    deadline - which is what keeps a stop with nothing to finish exactly as fast
+    as it was (design D1).
     """
     root = repo or paths.repo_root()
     running = instance.running_instance(repo=root)
@@ -901,27 +943,56 @@ def stop(
     if running is None:
         instance.clear_record()
         instance.clear_stop_request()
+        instance.clear_finishing()
         return StopResult(stopped=True, was_running=False, message="Es läuft nichts.")
 
     instance.request_stop()
     logger.info("Beenden angefordert (Anwendung %d, Frist %.0fs)", running.pid, timeout_seconds)
 
-    deadline = time.monotonic() + timeout_seconds
-    last_progress = time.monotonic()
-    forced = False
+    started = time.monotonic()
+    limit = started + STOP_LIMIT_SECONDS
+    deadline = min(started + timeout_seconds, limit)
+    last_progress = started
+    last_beat = instance.finishing_beat()
+    finishing = False
 
     while time.monotonic() < deadline:
         if not running.is_running():
             break
+
         now = time.monotonic()
+        beat = instance.finishing_beat()
+        if beat is not None and beat != last_beat:
+            # A beat that stands still is no beat: a file left behind by a crash
+            # never extends anything, which is what makes the sign self-healing.
+            finishing = True
+            deadline = min(max(deadline, now + STOP_GRACE_SECONDS), limit)
+        last_beat = beat
+
         if on_progress is not None and now - last_progress >= STOP_PROGRESS_SECONDS:
             on_progress(deadline - now)
             last_progress = now
         time.sleep(STOP_POLL_SECONDS)
 
+    forced = False
+    raw_takes: str | None = None
+
     if running.is_running():
         forced = True
-        logger.warning("Frist abgelaufen -- die Anwendung wird beendet")
+        raw_takes = _recording_folder()
+        where = raw_takes or "dem eingestellten Aufnahmeordner"
+        if finishing:
+            logger.error(
+                "Frist abgelaufen -- die Anwendung wird hart beendet und eine laufende "
+                "Nachbereitung dabei abgeschnitten. Die Rohspuren der Aufnahme liegen in %s",
+                where,
+            )
+        else:
+            logger.error(
+                "Frist abgelaufen -- die Anwendung wird hart beendet. Rohspuren einer "
+                "begonnenen Aufnahme liegen in %s",
+                where,
+            )
         instance.terminate_tree(running)
 
     instance.clear_stop_request()
@@ -936,15 +1007,18 @@ def stop(
                 "Backrec läuft weiter -- es ließ sich nicht beenden. "
                 "Den Rechner neu starten und es noch einmal versuchen."
             ),
+            raw_takes=raw_takes,
         )
 
     instance.clear_record()
     instance.clear_recording()
+    instance.clear_finishing()
     return StopResult(
         stopped=True,
         was_running=True,
         forced=forced,
-        message="Beendet." if not forced else "Beendet, nach Ablauf der Frist.",
+        message="Beendet." if not forced else _forced_message(finishing, raw_takes),
+        raw_takes=raw_takes,
     )
 
 
@@ -1032,189 +1106,7 @@ def follow_logs(stream: TextIO | None = None) -> CommandResult:
             return CommandResult(ok=True, lines=("Beendet.",))
 
 
-# --- Update, uninstall, release -----------------------------------------------
-
-
-def inspect_archive(
-    archive: Path,
-    repo: Path | None = None,
-) -> tuple[update_module.UpdatePlan | None, tuple[str, ...]]:
-    """Read the archive and compare the two versions. Changes nothing.
-
-    Split out of `apply_archive` so the window can name both versions and ask
-    **before** the first change is made. Only the small accompanying list is
-    read here; unpacking and checking every file comes after the answer.
-    """
-    root = repo or paths.repo_root()
-    try:
-        return update_module.plan(archive, repo=root), ()
-    except update_module.UpdateError as exc:
-        logger.warning("Archiv '%s' nicht verwendbar: %s", archive, exc)
-        return None, (str(exc), "Es wurde nichts verändert.")
-
-
-def _refuse_older(decision: update_module.UpdatePlan) -> CommandResult:
-    return CommandResult(
-        ok=False,
-        code=1,
-        lines=(
-            f"Die gewählte Fassung ist nicht neuer: hier läuft "
-            f"{decision.installed_version}, gewählt ist {decision.info.version}.",
-            "Es wurde nichts verändert. Wer es trotzdem will, bestätigt es ausdrücklich.",
-        ),
-    )
-
-
-def apply_archive(
-    archive: Path,
-    repo: Path | None = None,
-    *,
-    detached: bool = True,
-    allow_older: bool = False,
-) -> CommandResult:
-    """Check an archive, stage it alongside and apply it.
-
-    Nothing is unpacked before the two checks the specification puts first: the
-    archive has to belong to this tool, and it has to carry a newer version.
-    `allow_older` is the explicit consent of somebody who was shown both
-    versions and said yes anyway.
-
-    While the tool is running a helper outside the folder takes over mirroring
-    and restart: a process cannot replace the folder its own code came from.
-    """
-    root = repo or paths.repo_root()
-
-    decision, problem = inspect_archive(archive, root)
-    if decision is None:
-        return CommandResult(ok=False, code=1, lines=problem)
-
-    if not decision.newer and not allow_older:
-        return _refuse_older(decision)
-
-    try:
-        staging = update_module.stage(decision.info, repo=root)
-    except update_module.UpdateError as exc:
-        return CommandResult(ok=False, code=1, lines=(str(exc),))
-
-    running = instance.running_instance(repo=root)
-
-    if running is not None and detached:
-        helper = root / "scripts" / "win" / "apply-update.ps1"
-        if not helper.is_file():
-            logger.error("Helfer fuer das Aktualisieren fehlt: %s", helper)
-            return CommandResult(
-                ok=False,
-                code=1,
-                lines=(
-                    "Was ist passiert: Im Ordner des Werkzeugs fehlt eine Datei, "
-                    "die zum Aktualisieren gebraucht wird.",
-                    "Was tun: Die neue Fassung über den Ordner entpacken und "
-                    "Setup.cmd doppelklicken.",
-                ),
-            )
-
-        command = [
-            "powershell.exe",
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            str(helper),
-            "-RepoPath",
-            str(root),
-            "-StagingPath",
-            str(staging),
-            "-WaitForPid",
-            str(running.pid),
-            "-LogDir",
-            str(paths.logs_dir()),
-            "-ManifestPath",
-            str(paths.installed_manifest_path()),
-        ]
-        try:
-            subprocess.Popen(command, close_fds=True, creationflags=CREATE_NEW_CONSOLE)
-        except OSError as exc:
-            logger.error("Helfer fuer das Aktualisieren nicht startbar: %s", exc)
-            return CommandResult(
-                ok=False,
-                code=1,
-                lines=(
-                    "Was ist passiert: Das Aktualisieren ließ sich nicht anstoßen.",
-                    "Was tun: Die neue Fassung über den Ordner entpacken und "
-                    "Setup.cmd doppelklicken.",
-                ),
-            )
-
-        return CommandResult(
-            ok=True,
-            lines=(
-                f"Von {decision.installed_version} auf {decision.info.version}.",
-                "Backrec beendet sich jetzt und meldet sich gleich wieder.",
-            ),
-        )
-
-    copied, removed = update_module.mirror(staging, decision.info, root)
-    shutil.rmtree(staging, ignore_errors=True)
-    return CommandResult(
-        ok=True,
-        lines=(
-            f"Von {decision.installed_version} auf {decision.info.version}.",
-            f"{copied} Datei(en) übernommen, {len(removed)} entfernt.",
-            "Setup.cmd doppelklicken, damit die Arbeitsumgebung nachgezogen wird.",
-        ),
-    )
-
-
-def update_from_git(repo: Path | None = None) -> CommandResult:
-    """Developer path: only with an existing working copy."""
-    root = repo or paths.repo_root()
-
-    if not (root / ".git").exists():
-        return CommandResult(
-            ok=False,
-            code=1,
-            lines=(
-                "Dieser Ordner wird nicht über eine Versionsverwaltung gepflegt.",
-                "Neues Archiv über den Ordner entpacken und Setup.cmd erneut doppelklicken.",
-            ),
-        )
-
-    dirty = _run(["git", "status", "--porcelain"], cwd=root)
-    if dirty.returncode != 0:
-        return CommandResult(ok=False, code=1, lines=("Der Stand ließ sich nicht prüfen.",))
-    if dirty.stdout.strip():
-        return CommandResult(
-            ok=False,
-            code=1,
-            lines=(
-                "Es gibt lokale Änderungen -- es wird nichts erzwungen.",
-                "Die Änderungen sichern oder verwerfen und erneut versuchen.",
-            ),
-        )
-
-    pull = _run(["git", "pull", "--ff-only"], cwd=root)
-    if pull.returncode != 0:
-        return CommandResult(
-            ok=False,
-            code=1,
-            lines=(
-                "Der Stand lässt sich nicht ohne Zusammenführen nachziehen.",
-                (pull.stderr or pull.stdout).strip()[:400],
-            ),
-        )
-
-    synced = _run(list(SYNC_COMMAND), cwd=root)
-    if synced.returncode != 0:
-        return CommandResult(
-            ok=False, code=1, lines=("Die Arbeitsumgebung ließ sich nicht nachziehen.",)
-        )
-
-    checks = doctor.run(repo=root)
-    return CommandResult(
-        ok=not doctor.has_failure(checks),
-        code=doctor.exit_code(checks),
-        lines=tuple(doctor.render_text(checks)),
-    )
+# --- Uninstall and release ----------------------------------------------------
 
 
 def _runs_from(repo: Path) -> bool:

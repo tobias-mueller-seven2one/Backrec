@@ -5,7 +5,7 @@ what they say. It must not read like one: the people this tool is for are put
 off by terminals, and a wall of installer output is exactly the thing that makes
 them stop and ask someone.
 
-So every line of the setup, the update and the diagnosis report goes through
+So every line of the setup and the diagnosis report goes through
 this module, and the rules of the suite convention are code here rather than
 good intentions (design D19): numbered steps, one symbol and one sentence per
 result, one question at a time with a default the Enter key takes, no
@@ -156,7 +156,7 @@ def supports_color(stream: TextIO | None) -> bool:
 
 
 class Assistant:
-    """The output of the setup, the update and the report.
+    """The output of the setup and the report.
 
     `interactive=False` answers every question with its default without asking
     it - that is the unattended run, and it writes exactly the same lines as the

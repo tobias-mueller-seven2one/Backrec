@@ -137,7 +137,6 @@ class Observations:
     orphan_record: bool = False
     stop_request: bool = False
     legacy_env: Path | None = None
-    stale_folders: tuple[Path, ...] = ()
     report_count: int = 0
 
 
@@ -646,18 +645,6 @@ def _state_checks(facts: Observations) -> list[Check]:
             )
         )
 
-    if facts.stale_folders:
-        checks.append(
-            Check(
-                "state.stale_folders",
-                CATEGORY_STATE,
-                "Ordner einer abgelösten Fassung",
-                Level.WARN,
-                ", ".join(str(folder) for folder in facts.stale_folders),
-                "Diesen Ordner im Dateimanager löschen; die Diagnose fasst ihn nicht an.",
-            )
-        )
-
     if facts.report_count > REPORT_LIMIT:
         checks.append(
             Check(
@@ -847,20 +834,6 @@ def environment_matches_lock(root: Path) -> bool | None:
     return result.returncode == 0
 
 
-def stale_update_folders(root: Path) -> tuple[Path, ...]:
-    """Leftovers of an update: a staging folder or a superseded copy."""
-    found: list[Path] = []
-    try:
-        for sibling in root.parent.iterdir():
-            if not sibling.is_dir() or sibling == root:
-                continue
-            if sibling.name.startswith(f"{root.name}.old-") or sibling.name == f"{root.name}.update":
-                found.append(sibling)
-    except OSError as exc:
-        logger.debug("Nachbarordner nicht lesbar: %s", exc)
-    return tuple(sorted(found))
-
-
 def count_reports(directory: Path) -> int:
     try:
         return sum(1 for _entry in directory.glob(f"{REPORT_PREFIX}*.txt"))
@@ -962,7 +935,6 @@ def _observe_state(facts: Observations, root: Path) -> None:
     except OSError as exc:
         logger.debug("Veraltete Verknuepfungen nicht lesbar: %s", exc)
 
-    facts.stale_folders = stale_update_folders(root)
     facts.report_count = count_reports(paths.reports_dir())
     facts.logs_exists = paths.logs_dir().is_dir()
     facts.logs_writable = facts.logs_exists and is_writable(paths.logs_dir())

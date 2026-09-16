@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -224,6 +225,112 @@ def clear_recording(path: Path | None = None) -> None:
 
 def is_recording(path: Path | None = None) -> bool:
     return (path or paths.recording_marker_path()).is_file()
+
+
+# --- Whether the closing sequence is still working ----------------------------
+
+FINISHING_BEAT_SECONDS = 1.0
+
+
+def mark_finishing(beat: int, path: Path | None = None) -> Path:
+    """Writes one beat of the closing sequence's sign of life.
+
+    The content is a counter, not a timestamp (design D2): the reader only ever
+    asks whether the value differs from the one it saw last, and that question
+    needs no clock at all - neither a synchronised one nor a file system whose
+    modification times are precise enough to tell two beats apart.
+    """
+    target = path or paths.finishing_marker_path()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(str(int(beat)), encoding="utf-8")
+    return target
+
+
+def finishing_beat(path: Path | None = None) -> int | None:
+    """The beat currently written, or None if there is none to read.
+
+    A missing, empty, unreadable or nonsensical file all mean the same thing to
+    the caller - no sign of life - and none of them may raise: the stop that
+    reads this must never fail because of the file it is only consulting.
+    """
+    target = path or paths.finishing_marker_path()
+    try:
+        raw = target.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError):
+        return None
+
+    try:
+        return int(raw)
+    except ValueError:
+        return None
+
+
+def is_finishing(path: Path | None = None) -> bool:
+    return finishing_beat(path) is not None
+
+
+def clear_finishing(path: Path | None = None) -> None:
+    (path or paths.finishing_marker_path()).unlink(missing_ok=True)
+
+
+class FinishingBeacon:
+    """Beats for as long as the closing sequence works, in a thread of its own.
+
+    A thread is necessary, not convenient: mixing is a single blocking
+    `subprocess.run` of up to two minutes, and the closing sequence has no point
+    inside it at which it could write anything (design D3). Both that call and
+    the verified copy release the GIL for the duration of their I/O, so this
+    thread keeps running while they do.
+
+    Every write failure is logged and swallowed. The beacon describes the work;
+    it must never be the reason the work stops.
+    """
+
+    def __init__(
+        self,
+        *,
+        interval_seconds: float = FINISHING_BEAT_SECONDS,
+        path: Path | None = None,
+    ) -> None:
+        self._interval = interval_seconds
+        self._path = path
+        self._done = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        if self._thread is not None:
+            return
+
+        self._done.clear()
+        self._write(0)
+        self._thread = threading.Thread(target=self._run, name="finishing-beacon", daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._done.set()
+        thread, self._thread = self._thread, None
+        if thread is not None:
+            thread.join(timeout=max(self._interval * 2, 1.0))
+        clear_finishing(self._path)
+
+    def __enter__(self) -> "FinishingBeacon":
+        self.start()
+        return self
+
+    def __exit__(self, *_exception: object) -> None:
+        self.stop()
+
+    def _run(self) -> None:
+        beat = 0
+        while not self._done.wait(self._interval):
+            beat += 1
+            self._write(beat)
+
+    def _write(self, beat: int) -> None:
+        try:
+            mark_finishing(beat, self._path)
+        except OSError as exc:
+            logger.warning("Lebenszeichen der Nachbereitung nicht schreibbar: %s", exc)
 
 
 def terminate_tree(process: psutil.Process, grace_seconds: float = 10.0) -> list[int]:

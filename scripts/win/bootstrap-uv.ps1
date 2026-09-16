@@ -69,6 +69,33 @@ Write-Gut 'Hilfsprogramm vorhanden'
 # --- Working environment -----------------------------------------------------
 Write-Schritt 'Vorbereitung: Arbeitsumgebung'
 
+# First action of this section, before anything touches the environment: the
+# sync below replaces the package inside `.venv` that a running application took
+# its code from. It would keep running on code that no longer exists on disk,
+# and nothing on screen would say so. `control.setup` stops as well, but only
+# after this script has finished -- on the double click route that is too late.
+#
+# The mechanics are not rebuilt here. The entry point of the environment owns
+# the request file, the deadline and the identity of the process; this script
+# only calls it and waits for it to end. No environment, no entry point, nothing
+# to stop: a first setup passes straight through.
+$entryPoint = Join-Path $repo '.venv\Scripts\backrec.exe'
+if (Test-Path $entryPoint) {
+    Write-Host '    Eine laufende Anwendung wird zuerst beendet.'
+    try {
+        & $entryPoint stop
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host '    [!] Die Anwendung ließ sich nicht beenden.'
+            Write-Host '        Die Einrichtung geht trotzdem weiter.'
+        }
+    } catch {
+        # Never a reason to abort: an environment that cannot be rebuilt is the
+        # worse outcome, and the setup itself tries the stop a second time.
+        Write-Host '    [!] Das Beenden der Anwendung hat nicht geklappt.'
+        Write-Host '        Die Einrichtung geht trotzdem weiter.'
+    }
+}
+
 # An uninstall that ran from inside the working environment cannot remove it
 # completely: Windows does not release the running executable. What stays behind
 # is a folder without pyvenv.cfg that a rebuild leaves standing without a word
@@ -80,9 +107,9 @@ if ((Test-Path '.venv') -and -not (Test-Path '.venv\pyvenv.cfg')) {
 
 # --reinstall-package is not caution but duty: a sync against the locked list
 # only looks at the third-party packages. The files of this tool itself count as
-# unchanged to it, even when a new archive has just been copied over them.
-# Without this switch the old state would keep running after an update, and
-# silently at that.
+# unchanged to it, even when the folder holds a newly unpacked archive.
+# Without this switch the previous state would keep running, and silently at
+# that.
 #
 # Here and not in the setup itself: the setup runs in the working environment it
 # would have to replace, and Windows does not release a running executable. This

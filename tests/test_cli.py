@@ -26,10 +26,13 @@ COMMANDS = (
     "doctor",
     "shortcut",
     "uninstall",
-    "update",
     "logs",
     "release",
 )
+
+# Backrec has no way to update itself (decision of 15.09.2026). The name is
+# listed here so the absence is checked, not merely left unwritten.
+ABSENT_COMMANDS = ("update",)
 
 # What writes to a colleague. `print` is on the list although the package must
 # not use it at all - a test that only knows the output layer would wave through
@@ -115,9 +118,13 @@ def test_shortcut_status_and_remove_exclude_each_other() -> None:
         parse(["shortcut", "--status", "--remove"])
 
 
-def test_update_takes_an_archive_or_the_developer_route() -> None:
-    assert parse(["update", "irgendwo.zip"]).archive == Path("irgendwo.zip")
-    assert parse(["update", "--git"]).git
+@pytest.mark.parametrize("name", ABSENT_COMMANDS)
+def test_no_command_updates_the_tool_itself(name: str) -> None:
+    """A new state is fetched and replaces the old one; there is no third way."""
+    with pytest.raises(SystemExit):
+        parse([name])
+
+    assert name not in cli._COMMANDS
 
 
 def test_uninstall_knows_purge() -> None:
@@ -141,14 +148,25 @@ def test_stop_without_a_running_instance_ends_without_error() -> None:
     assert cli.main(["stop"]) == 0
 
 
-def test_update_without_an_archive_names_the_one_way(capsys) -> None:
-    """Weg B ist entfallen -- was bleibt, ist das Entpacken über den Ordner."""
-    assert cli.main(["update"]) == 0
+def test_a_forced_stop_reads_as_a_warning_and_still_ends_with_zero(monkeypatch, capsys) -> None:
+    """Ended, so exit 0 - but a cut-off recording must not read as a tick."""
+    monkeypatch.setattr(
+        cli.control,
+        "stop",
+        lambda *_args, **_kwargs: cli.control.StopResult(
+            stopped=True,
+            was_running=True,
+            forced=True,
+            message="Beendet, nach Ablauf der Frist. Die Rohspuren liegen in C:\\Aufnahmen.",
+            raw_takes="C:\\Aufnahmen",
+        ),
+    )
+
+    code = cli.main(["stop"])
 
     printed = capsys.readouterr().out
-    assert "Setup.cmd" in printed
-    assert "Archiv" in printed
-    assert "Menü" not in printed and "Zahnrad" not in printed
+    assert code == 0
+    assert "C:\\Aufnahmen" in printed
 
 
 def test_doctor_json_is_machine_readable(capsys) -> None:

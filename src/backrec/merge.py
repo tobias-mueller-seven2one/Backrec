@@ -18,6 +18,12 @@ log = get_logger(__name__)
 FFMPEG_EXE = "ffmpeg"
 MERGE_SAMPLERATE = 44100
 MERGE_CHANNELS = 1
+# Left where it is on purpose (design D5). Two hours of PCM in 120 s is about
+# 60x real time for a chain that decodes, resamples and mixes without ever
+# encoding, and the cost of the number being too low is a named failure with
+# both raw takes still in place - not a loss. What changed around it is the
+# ceiling of `control.stop`, which now lies above this value instead of below;
+# a test in `tests/test_control.py` keeps the two from drifting apart again.
 MERGE_TIMEOUT_SECONDS = 120
 
 # This runs after every single recording, from a window that owns no console:

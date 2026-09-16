@@ -1,9 +1,9 @@
-"""The version, read from the `VERSION` file, and the comparison of two of them.
+"""The version, read from the `VERSION` file.
 
 Free of every package import on purpose: the setup reads the version before a
-runtime exists, and an update compares it before anything is unpacked. That is
-also why the version lives in a text file and not in `pyproject.toml` - one line
-of text is readable from a batch file, a TOML value is not (design D18).
+runtime exists. That is also why the version lives in a text file and not in
+`pyproject.toml` - one line of text is readable from a batch file, a TOML value
+is not (design D18).
 """
 
 from __future__ import annotations
@@ -41,23 +41,10 @@ def read_version(root: Path) -> str:
 def parse_version(value: str) -> tuple[int, int, int] | None:
     """`2026.09.1` as three numbers, or None if it is not one.
 
-    Compared as numbers, never as text: `2026.10.1` has to come after
-    `2026.09.2`, and as strings it does not.
+    The form is checked before a release is built: a version that does not have
+    it would end up in an archive name nobody can order.
     """
     match = _VERSION_PATTERN.match(value)
     if match is None:
         return None
     return (int(match.group(1)), int(match.group(2)), int(match.group(3)))
-
-
-def is_newer(candidate: str, installed: str) -> bool:
-    """Whether `candidate` is a later version than `installed`.
-
-    An unparsable version on either side counts as not newer, so a damaged
-    version file can never talk an update into overwriting a working install.
-    """
-    left = parse_version(candidate)
-    right = parse_version(installed)
-    if left is None or right is None:
-        return False
-    return left > right

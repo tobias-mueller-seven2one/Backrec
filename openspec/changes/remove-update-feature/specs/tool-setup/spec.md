@@ -1,9 +1,18 @@
-# tool-setup Specification
+## REMOVED Requirements
 
-## Purpose
-Die Einrichtung bringt Backrec auf einem frischen Windows-Rechner von „ZIP entpackt" zu „startbereit", ohne Administratorrechte, ohne Git und ohne Vorwissen: Laufzeit beschaffen, Umgebung reproduzierbar bauen, Konfiguration anlegen, externe Abhängigkeiten prüfen und beschaffen, Ergebnis prüfen, Verknüpfung anbieten. Sie umfasst außerdem das Bauen eines Release-ZIP und das Entfernen derselben Installation.
+### Requirement: Aktualisierung über ein neues Release-ZIP
 
-## Requirements
+**Reason**: Die Anwendungen der MemoSuite haben keine Aktualisierungsfunktion (Entscheidung Tobias Müller, 15.09.2026). Ein neuer Stand wird beschafft, indem das Programm neu heruntergeladen wird und den vorhandenen Stand ersetzt — fachlich ein vollständiges Löschen mit anschließendem normalem Setup. Beide Vorgänge sind bereits vollständig spezifiziert („Deinstallation", „Einrichtung aus einem entpackten Release-ZIP"). Eine dritte Anforderung, die beides zusammenfasst, deckt keinen fachlichen Bedarf ab und trägt Lasten, die keinem Nutzen gegenüberstehen: eine Selbstersetzung des laufenden Programms, ein Vergleichsmaßstab über den Dateibestand und ein Löschpfad im Ordner des Benutzers.
+
+**Migration**: Keine. Der Vorgang „Programm aktualisieren" existiert nicht mehr und wird nirgendwo beschrieben — weder als Kommando noch als Bedienweg, Erkennung oder Doku-Abschnitt. Die Einrichtung bleibt idempotent und darf beliebig oft laufen; sie kennt dabei keinen Vorgängerstand und vergleicht keine Versionen.
+
+### Requirement: Entfernen von Altdateien anhand des Release-Verzeichnisses
+
+**Reason**: Die Anforderung existierte ausschließlich, um bei einer Aktualisierung die Dateien des Vorgängerstands zu entfernen, die im neuen Stand fehlen. Ohne Aktualisierungsvorgang gibt es keinen Vorgängerstand im selben Ordner, gegen den verglichen werden könnte. Die Beschreibung des Release war allein dafür da, dieser Vergleich zu ermöglichen; sie wird von nichts anderem gebraucht.
+
+**Migration**: Keine. Die Beschreibung des Release (`release-manifest.json`) wird nicht mehr erzeugt, nicht mehr ins Paket gelegt und nicht mehr außerhalb des Ordners abgelegt; eine bestehende Datei dieses Namens wird weder gelesen noch gelöscht.
+
+## MODIFIED Requirements
 
 ### Requirement: Zwei Doppelklick-Dateien und eine Versionsangabe im Wurzelverzeichnis
 
@@ -102,144 +111,6 @@ Das Bauen des Release-Pakets MUST die Datei maschinell prüfen: Name, Zeichenkod
 - **THEN** beginnt sie mit einem Verweis auf `LIES-MICH-ZUERST.txt`
 - **AND** sie enthält keinen eigenen, an Kollegen gerichteten Einrichtungsteil
 
-### Requirement: Einrichtung aus einem entpackten Release-ZIP
-
-Die Einrichtung MUST aus einem Ordner heraus funktionieren, der durch Entpacken eines Release-ZIP entstanden ist, ohne dass Git, ein Repository-Klon oder eine Netzwerkfreigabe vorhanden ist. Sie MUST beim ersten Lauf die Internet-Zonenkennung der entpackten Dateien entfernen, damit keine weiteren Sicherheitsdialoge erscheinen; scheitert das Entfernen, MUST es als Warnung gemeldet werden und die Einrichtung MUST fortfahren. Sie MUST in einem Ordnerpfad funktionieren, der Leerzeichen, Umlaute oder einen Cloud-synchronisierten Ordner enthält, und MUST ihre Ausgabe in einer Zeichenkodierung erzeugen, in der Umlaute korrekt erscheinen.
-
-#### Scenario: Einrichtung ohne Git
-
-- **WHEN** die Einrichtung in einem entpackten Ordner ohne Versionsverwaltung läuft
-- **THEN** läuft sie vollständig durch
-- **AND** kein Schritt verlangt Git oder einen Zugriff auf ein Repository
-
-#### Scenario: Zonenkennung wird entfernt
-
-- **WHEN** die Einrichtung zum ersten Mal in einem aus dem Internet bezogenen Ordner läuft
-- **THEN** tragen die Dateien des Ordners danach keine Internet-Zonenkennung mehr
-- **AND** ein erneuter Start zeigt keinen weiteren Sicherheitsdialog
-
-#### Scenario: Zonenkennung lässt sich nicht entfernen
-
-- **WHEN** das Entfernen der Zonenkennung fehlschlägt
-- **THEN** meldet die Einrichtung eine Warnung mit dem Weg über die Dateieigenschaften
-- **AND** sie setzt die Einrichtung fort
-
-#### Scenario: Pfad mit Leerzeichen und Umlauten
-
-- **WHEN** der Ordner in einem Pfad mit Leerzeichen und Umlauten liegt
-- **THEN** läuft die Einrichtung vollständig durch
-- **AND** die Pfade erscheinen in den Meldungen unverfälscht
-
-### Requirement: Assistenten-Ausgabe der Einrichtung
-
-Die Einrichtung MUST ihre Ausgabe für Benutzer ohne Vorwissen gestalten. Jeder Schritt MUST mit laufender Nummer und Gesamtzahl angekündigt und sein Ergebnis mit einem Symbol und einem Satz Klartext gemeldet werden. Jede Rückfrage MUST eine Vorgabe nennen, die mit der Eingabetaste übernommen wird, und es MUST NOT mehr als eine Frage gleichzeitig gestellt werden. Die Ausgabe MUST NOT Fachbegriffe der Umsetzung, eine Ausnahmeverfolgung oder eine unbehandelte Fehlermeldung des Systems enthalten; technische Einzelheiten MUST das Protokoll aufnehmen, dessen Pfad genau einmal am Ende genannt wird. Jeder Fehler MUST in zwei Aussagen erscheinen: was geschehen ist und was zu tun ist, mit einem konkreten nächsten Handgriff. Am Ende MUST eine Zusammenfassung aller Schritte mit ihren Symbolen stehen. Farbige Ausgabe MUST NUR erfolgen, wenn die Konsole sie darstellt; andernfalls MUST die Aussage allein durch Textsymbole getragen werden.
-
-#### Scenario: Schritte sind gezählt
-
-- **WHEN** die Einrichtung läuft
-- **THEN** nennt jeder Schritt seine Nummer und die Gesamtzahl
-- **AND** jedes Ergebnis erscheint mit Symbol und einem Satz Klartext
-
-#### Scenario: Frage mit Vorgabe
-
-- **WHEN** die Einrichtung eine Frage stellt
-- **THEN** nennt sie eine Vorgabe
-- **AND** die Eingabetaste allein übernimmt die Vorgabe
-
-#### Scenario: Fehler ohne Fachjargon
-
-- **WHEN** ein Schritt fehlschlägt
-- **THEN** nennt die Ausgabe in zwei Aussagen, was geschehen ist und was zu tun ist
-- **AND** sie enthält keine Ausnahmeverfolgung und keinen Fachbegriff der Umsetzung
-- **AND** die technischen Einzelheiten stehen im Protokoll
-
-#### Scenario: Abschluss
-
-- **WHEN** die Einrichtung endet
-- **THEN** erscheint eine Zusammenfassung aller Schritte mit ihren Symbolen
-- **AND** der Pfad des Protokolls wird genau einmal genannt
-- **AND** das Fenster bleibt offen, bis der Benutzer es schließt
-
-#### Scenario: Konsole ohne Farbunterstützung
-
-- **WHEN** die Konsole keine farbige Ausgabe darstellt
-- **THEN** bleibt jedes Ergebnis an seinem Textsymbol erkennbar
-
-### Requirement: Ablösung des bisherigen Startskripts
-
-`Start_Recorder.bat` MUST NOT weiterhin eine Umgebung bauen, Abhängigkeiten installieren oder die Anwendung starten. Die Datei MUST als Hinweis erhalten bleiben, MUST auf `Setup.cmd` und `Start.cmd` verweisen und MUST mit einem Exit-Code ungleich 0 enden, damit ein Doppelklick nicht wie ein erfolgreicher Start aussieht.
-
-#### Scenario: Doppelklick auf das alte Skript
-
-- **WHEN** `Start_Recorder.bat` per Doppelklick gestartet wird
-- **THEN** erscheint ein Hinweis, der `Setup.cmd` für die Einrichtung und `Start.cmd` für den Start nennt
-- **AND** es wird keine Umgebung gebaut, nichts installiert und die Anwendung nicht gestartet
-- **AND** der Exit-Code ist ungleich 0
-
-### Requirement: Bootstrap der Laufzeit ohne Administratorrechte
-
-Die Einrichtung MUST prüfen, ob der Paket- und Umgebungsmanager `uv` verfügbar ist, und ihn andernfalls in das Benutzerprofil beschaffen, ohne Administratorrechte zu verlangen. Scheitert die Beschaffung über den Paketmanager des Systems, MUST ein zweiter Weg mit einer festgelegten Version versucht werden. Scheitern beide, MUST die Einrichtung mit einer Meldung abbrechen, die den fehlgeschlagenen Weg und die manuelle Alternative nennt. Der Python-Interpreter MUST der im Repository festgelegten Version entsprechen und MUST von `uv` verwaltet werden dürfen; ein Interpreter, der nur ein Platzhalter des Microsoft Store ist, MUST als solcher erkannt und erklärt werden.
-
-#### Scenario: uv fehlt
-
-- **WHEN** die Einrichtung startet und `uv` nicht verfügbar ist
-- **THEN** wird `uv` in das Benutzerprofil installiert
-- **AND** die Einrichtung fährt anschließend ohne Neustart der Sitzung fort
-
-#### Scenario: Beide Beschaffungswege scheitern
-
-- **WHEN** weder der Paketmanager noch der zweite Weg `uv` bereitstellen können
-- **THEN** endet die Einrichtung mit einem Exit-Code ungleich 0
-- **AND** die Meldung nennt beide fehlgeschlagenen Wege und den manuellen Installationsweg
-
-#### Scenario: Store-Platzhalter als Python
-
-- **WHEN** der gefundene `python`-Aufruf nur der Platzhalter des Microsoft Store ist
-- **THEN** meldet die Einrichtung genau diesen Umstand
-- **AND** sie nennt den Weg zu einem echten Interpreter
-
-### Requirement: Reproduzierbare Umgebung
-
-Die Abhängigkeiten MUST mit exakten Versionen in einer Lockdatei festgehalten sein. Die Einrichtung MUST die Umgebung ausschließlich aus dieser Lockdatei erzeugen und MUST abbrechen, wenn die Lockdatei nicht zur Projektdefinition passt. Ein Start MUST NOT Abhängigkeiten installieren oder aktualisieren.
-
-#### Scenario: Umgebung wird aus der Lockdatei erzeugt
-
-- **WHEN** die Einrichtung die Umgebung baut
-- **THEN** entstehen genau die in der Lockdatei festgehaltenen Versionen
-
-#### Scenario: Lockdatei passt nicht zur Projektdefinition
-
-- **WHEN** Projektdefinition und Lockdatei auseinanderlaufen
-- **THEN** bricht die Einrichtung mit einem Exit-Code ungleich 0 ab
-- **AND** die Meldung nennt das Kommando, mit dem die Lockdatei erneuert wird
-
-#### Scenario: Start installiert nichts
-
-- **WHEN** die Anwendung gestartet wird
-- **THEN** wird keine Abhängigkeit installiert oder verändert
-
-### Requirement: Beschaffung von ffmpeg
-
-Die Einrichtung MUST prüfen, ob ffmpeg aufrufbar ist. Fehlt es, MUST es ohne Administratorrechte in das Benutzerprofil beschafft werden. Scheitert das, MUST die Einrichtung eine Anleitung zur manuellen Installation ausgeben und mit einem Exit-Code ungleich 0 enden, weil ohne ffmpeg keine Aufnahme gemischt werden kann. Ein bereits vorhandenes ffmpeg MUST NOT erneut installiert werden.
-
-#### Scenario: ffmpeg fehlt und wird beschafft
-
-- **WHEN** die Einrichtung läuft und ffmpeg nicht aufrufbar ist
-- **THEN** wird ffmpeg in das Benutzerprofil installiert
-- **AND** die Einrichtung prüft danach erneut, ob es aufrufbar ist
-
-#### Scenario: Beschaffung scheitert
-
-- **WHEN** die Beschaffung von ffmpeg fehlschlägt
-- **THEN** nennt die Ausgabe die manuelle Installation und den Umstand, dass ohne ffmpeg keine Mischung entsteht
-- **AND** die Einrichtung endet mit einem Exit-Code ungleich 0
-
-#### Scenario: ffmpeg ist vorhanden
-
-- **WHEN** ffmpeg bereits aufrufbar ist
-- **THEN** wird nichts installiert
-- **AND** die gefundene Version wird gemeldet
-
 ### Requirement: Reihenfolge, Meldungen und Abschluss der Einrichtung
 
 Die Einrichtung MUST in dieser Reihenfolge ablaufen: Laufzeit, Umgebung, Konfiguration, externe Abhängigkeiten, Prüfung durch die Diagnose, Frage nach der Desktop-Verknüpfung, Frage nach dem Start. Bevor die Einrichtung an der Umgebung arbeitet, MUST sie eine laufende Anwendung beenden. Dieses Beenden MUST unbedingt geschehen: Es MUST NOT von einem Versionsstand, einem Vergleich zweier Versionen oder einer sonstigen Erkennung eines Wechsels abhängen, und die zugehörige Meldung MUST NOT einen Versionswechsel nennen. Läuft keine Anwendung, MUST die Einrichtung ohne eine Meldung über ein Beenden fortfahren.
@@ -326,17 +197,6 @@ Jeder Schritt MUST eine lesbare Meldung über Beginn und Ergebnis erzeugen. Ein 
 - **AND** sie startet die Anwendung nicht von sich aus
 - **AND** sie meldet am Ende dasselbe Ergebnis wie der geführte Weg
 
-### Requirement: Idempotenz der Einrichtung
-
-Ein zweiter Lauf der Einrichtung auf einer bereits eingerichteten Installation MUST NOT eine vorhandene Konfiguration ungefragt überschreiben, MUST NOT eine bereits vorhandene externe Abhängigkeit erneut installieren und MUST NOT die Umgebung ohne Anlass neu bauen. Die Konfiguration ändert sich nur dort, wo der Benutzer im Einrichten ausdrücklich einen neuen Wert angibt, und um Schlüssel, die die Vorlage neu führt. Er MUST melden, welche Schritte übersprungen wurden.
-
-#### Scenario: Zweiter Lauf
-
-- **WHEN** die Einrichtung auf einer eingerichteten Installation erneut läuft und der Benutzer keine Änderung verlangt
-- **THEN** bleibt die bestehende Konfiguration unverändert
-- **AND** die Ausgabe nennt die übersprungenen Schritte
-- **AND** der Exit-Code ist 0, sofern die Diagnose keinen harten Fehler meldet
-
 ### Requirement: Bauen eines Release-Pakets
 
 Es MUST ein Kommando geben, das ein Release-Paket baut. Es MUST ein ZIP erzeugen, dessen oberste Ebene ein einzelner Ordner mit dem Werkzeugnamen ist, MUST die Versionsdatei darin ablegen und MUST den Dateinamen aus Werkzeugname und Version bilden. Aufgenommen MUST ausschließlich werden, was in der Versionsverwaltung geführt ist; die eingerichtete Umgebung, Zwischenstände des Interpreters, Protokolle, Konfigurationsdateien, Verknüpfungen und Dateien mit Zugangsdaten MUST NOT enthalten sein. Die Einstiegsanleitung MUST im Paket enthalten sein. Das Paket MUST NOT eine Beschreibung des Release mit Prüfsummen der enthaltenen Dateien führen. Vor dem Bauen MUST geprüft werden, dass die Lockdatei zur Projektdefinition passt, dass keine versionierte Datei einen Benutzer-, Firmen- oder Cloud-Speicherpfad enthält und dass die Einstiegsanleitung alle Regeln der Anforderung „Einstiegsanleitung im Wurzelverzeichnis" erfüllt; ein Treffer MUST den Lauf mit einem Exit-Code ungleich 0 abbrechen. Das Paket MUST außerhalb des Repositorys abgelegt und sein Pfad MUST ausgegeben werden. Das Kommando MUST NOT in der Einstiegsanleitung erscheinen.
@@ -369,40 +229,3 @@ Es MUST ein Kommando geben, das ein Release-Paket baut. Es MUST ein ZIP erzeugen
 - **WHEN** die Lockdatei nicht zur Projektdefinition passt
 - **THEN** bricht der Lauf ab, ohne ein Paket zu erzeugen
 - **AND** die Meldung nennt das Kommando zur Erneuerung der Lockdatei
-
-### Requirement: Deinstallation
-
-Die Deinstallation MUST ohne ein Kommando möglich sein: Fenster schließen, Desktop-Verknüpfung löschen, Ordner löschen. Die Einstiegsanleitung und die Auskunft über die Installation MUST diesen Weg in dieser Form nennen; die Auskunft MUST dabei sagen, dass Konfiguration, Protokolle und Zustand im benutzerbezogenen Anwendungsdatenverzeichnis liegen und getrennt zu löschen sind.
-
-Zusätzlich MUST es ein Kommando geben. Es MUST die Desktop-Verknüpfung und die erzeugte Umgebung entfernen und eine laufende Instanz zuvor beenden. Ohne ausdrückliche Anforderung MUST es Konfiguration, Protokolle und Zustand erhalten; wird es ausdrücklich angefordert, MUST es zusätzlich das Verzeichnis mit Konfiguration, Protokollen und Zustand entfernen. Es MUST NOT Aufnahmen und Zieldateien im Datenbereich löschen, MUST NOT extern installierte Programme entfernen und MUST NOT die suiteweite Handshake-Datei antasten. Am Ende MUST es benennen, was absichtlich nicht entfernt wurde, und wie es entfernt werden kann.
-
-#### Scenario: Deinstallation ohne Kommando
-
-- **WHEN** ein Benutzer die Anwendung ohne Kommando entfernen will
-- **THEN** nennen die Einstiegsanleitung und die Auskunft über die Installation drei Schritte: Fenster schließen, Verknüpfung löschen, Ordner löschen
-- **AND** die Auskunft nennt den Ort, an dem Konfiguration, Protokolle und Zustand verbleiben
-
-#### Scenario: Deinstallation ohne Datenlöschung
-
-- **WHEN** die Deinstallation ohne ausdrückliche Anforderung zur Datenlöschung angefordert wird
-- **THEN** sind Verknüpfung und Umgebung entfernt
-- **AND** Konfiguration, Protokolle und Zustand bestehen weiter
-- **AND** die Ausgabe nennt das Kommando für die vollständige Entfernung
-
-#### Scenario: Vollständige Deinstallation
-
-- **WHEN** die Deinstallation mit ausdrücklicher Datenlöschung angefordert wird
-- **THEN** ist zusätzlich das Verzeichnis mit Konfiguration, Protokollen und Zustand entfernt
-- **AND** die Aufnahmen und Zieldateien im Datenbereich bestehen weiter
-
-#### Scenario: Laufende Instanz beim Deinstallieren
-
-- **WHEN** die Deinstallation angefordert wird, während die Anwendung läuft
-- **THEN** wird die Anwendung zuvor beendet
-- **AND** die Deinstallation beginnt erst danach
-
-#### Scenario: Extern installierte Programme bleiben
-
-- **WHEN** die Deinstallation läuft
-- **THEN** bleiben ffmpeg und der Paket- und Umgebungsmanager installiert
-- **AND** die Ausgabe nennt sie als absichtlich nicht entfernt

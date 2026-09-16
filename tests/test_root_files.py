@@ -52,7 +52,11 @@ def test_the_two_text_files_are_there_and_start_nothing() -> None:
 
 @pytest.mark.parametrize("name", ["Stop.cmd", "Update.cmd", "Doctor.cmd", "Uninstall.cmd"])
 def test_no_further_double_click_file_was_added(name: str) -> None:
-    """Stop and update are commands and menu entries, not files (design D16)."""
+    """Stopping and the diagnosis are commands, not files (design D16).
+
+    `Update.cmd` stays on this list although the tool has no way to update
+    itself: the list is what must never appear in the root folder.
+    """
     assert not (ROOT / name).exists()
 
 
@@ -94,7 +98,7 @@ def test_the_setup_wrapper_calls_the_bootstrap_before_the_environment_exists() -
 
 
 def test_the_setup_wrapper_hands_its_arguments_on() -> None:
-    """The update helper calls it with --unattended --start."""
+    """A script calls it with --unattended --start."""
     assert "%*" in text_of("Setup.cmd")
 
 
@@ -137,63 +141,71 @@ def test_the_retired_script_builds_nothing_and_starts_nothing() -> None:
 def test_the_helper_scripts_live_under_scripts() -> None:
     """The one place a wrapper is allowed to delegate procedure to."""
     assert (ROOT / "scripts" / "win" / "bootstrap-uv.ps1").is_file()
-    assert (ROOT / "scripts" / "win" / "apply-update.ps1").is_file()
 
 
 def test_the_bootstrap_reinstalls_this_package() -> None:
-    """Without it a mirrored update would silently keep the old state running."""
+    """A plain sync does not notice changed sources of this package.
+
+    Only this script stands outside the environment it rebuilds, so it is the
+    one place where the reinstall can happen at all.
+    """
     content = (ROOT / "scripts" / "win" / "bootstrap-uv.ps1").read_text(encoding="utf-8")
 
     assert "--reinstall-package backrec" in content
 
 
-def test_the_update_helper_calls_the_setup_by_its_full_path() -> None:
-    """`Push-Location` moves the session, not the folder a child process inherits.
+def bootstrap_text() -> str:
+    return (ROOT / "scripts" / "win" / "bootstrap-uv.ps1").read_text(encoding="utf-8-sig")
 
-    Called by its bare name the setup was looked for wherever Backrec had been
-    started from - and an update ended with mirrored files, an environment that
-    was never brought up to date and no restart at all.
+
+def test_the_bootstrap_stops_a_running_application_before_the_sync() -> None:
+    """The reinstall above is what makes the order matter (design D10).
+
+    On the double click route this script runs before the setup does, so its own
+    sync would hit an open window first and the stop inside `control.setup`
+    would come too late.
     """
-    content = (ROOT / "scripts" / "win" / "apply-update.ps1").read_text(encoding="utf-8")
+    content = bootstrap_text()
 
-    assert "Join-Path $RepoPath 'Setup.cmd'" in content
-    assert "-WorkingDirectory $RepoPath" in content
-    assert "cmd.exe /c" not in content
+    stop_call = content.find("$entryPoint stop")
+    sync_call = content.find("uv sync")
+
+    assert ".venv\\Scripts\\backrec.exe" in content
+    assert stop_call != -1
+    assert stop_call < sync_call
 
 
-def test_the_update_helper_puts_the_new_list_into_the_folder() -> None:
-    """Without it the setup right afterwards deletes what just arrived.
+def test_the_bootstrap_brings_no_stop_mechanics_of_its_own() -> None:
+    """It calls the existing command and waits - no deadline, no process list."""
+    content = bootstrap_text()
 
-    The accompanying list does not list itself, so mirroring by list leaves the
-    previous release's copy in the folder - and every file new in this release
-    then looks like a leftover of the one before.
+    for forbidden in ("Stop-Process", "Get-Process", "Wait-Process", "Start-Sleep", "pythonw"):
+        assert forbidden not in content
+
+
+def test_a_failed_stop_never_ends_the_bootstrap() -> None:
+    """No environment, no entry point, nothing to stop - and a stop that fails
+    is the worse reason to leave the environment unbuilt."""
+    content = bootstrap_text()
+    block = content[content.index("$entryPoint = ") : content.index("& uv sync")]
+
+    assert "Test-Path $entryPoint" in block
+    assert "exit 1" not in block
+
+
+def test_no_helper_script_replaces_the_tool_itself() -> None:
+    """Backrec has no way to update itself (decision of 15.09.2026).
+
+    A new state is fetched by downloading the program again and replacing the
+    old one - a deletion followed by an ordinary setup. No script stages a
+    folder, mirrors files in or fetches a console of its own for it.
     """
-    content = (ROOT / "scripts" / "win" / "apply-update.ps1").read_text(encoding="utf-8")
+    found = sorted(path.name for path in (ROOT / "scripts" / "win").iterdir())
 
-    assert "Join-Path $RepoPath 'release-manifest.json'" in content
-
-
-def test_the_update_helper_starts_the_tool_again() -> None:
-    """It stopped the tool for this update; it has to bring it back."""
-    content = (ROOT / "scripts" / "win" / "apply-update.ps1").read_text(encoding="utf-8")
-
-    assert "'--unattended', '--start'" in content
+    assert found == ["bootstrap-uv.ps1"]
 
 
-def test_the_update_helper_does_not_wait_for_the_tool_it_restarts() -> None:
-    """`-Wait` waits for the process *and every descendant* of it.
-
-    The setup starts Backrec detached at the end, so this window would stay open
-    for as long as Backrec runs and never say that it is finished.
-    """
-    content = (ROOT / "scripts" / "win" / "apply-update.ps1").read_text(encoding="utf-8")
-    code = "\n".join(line for line in content.splitlines() if not line.lstrip().startswith("#"))
-
-    assert "-Wait " not in code
-    assert "WaitForExit()" in code
-
-
-HELFER = ("bootstrap-uv.ps1", "apply-update.ps1")
+HELFER = ("bootstrap-uv.ps1",)
 
 # Spellings that replace an umlaut. The first lines a colleague ever sees come
 # out of the bootstrap, and "fuer" in them says the tool could not manage its
@@ -243,7 +255,7 @@ def test_the_helper_scripts_stay_within_powershell_5() -> None:
     Comments are stripped first - both scripts name the constructs they avoid,
     and a check that trips over its own documentation gets deleted, not fixed.
     """
-    for name in ("bootstrap-uv.ps1", "apply-update.ps1"):
+    for name in HELFER:
         raw = (ROOT / "scripts" / "win" / name).read_text(encoding="utf-8")
         code = "\n".join(
             line for line in raw.splitlines() if not line.lstrip().startswith("#")

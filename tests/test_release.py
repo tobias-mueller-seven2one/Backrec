@@ -7,7 +7,6 @@ written to catch him.
 
 from __future__ import annotations
 
-import json
 import zipfile
 from pathlib import Path
 
@@ -103,36 +102,30 @@ def test_the_planning_artefacts_stay_out(tmp_path: Path) -> None:
         assert not [name for name in bundle.namelist() if "openspec/" in name]
 
 
-def test_the_guide_sits_at_the_top_level_and_is_listed_with_its_checksum(tmp_path: Path) -> None:
+def test_the_guide_sits_at_the_top_level(tmp_path: Path) -> None:
     root = make_repo(tmp_path)
 
     result = build(root, tmp_path / "out")
 
     with zipfile.ZipFile(result.archive) as bundle:
         assert f"{paths.TOOL_NAME}/{paths.GUIDE_FILE_NAME}" in bundle.namelist()
-        manifest = json.loads(
-            bundle.read(f"{paths.TOOL_NAME}/{release.MANIFEST_NAME}").decode("utf-8")
-        )
-
-    listed = {entry["path"]: entry for entry in manifest["files"]}
-    assert paths.GUIDE_FILE_NAME in listed
-    assert len(listed[paths.GUIDE_FILE_NAME]["sha256"]) == 64
 
 
-def test_the_manifest_names_tool_version_date_and_every_file(tmp_path: Path) -> None:
+def test_the_archive_carries_no_list_of_its_own_files(tmp_path: Path) -> None:
+    """Its only reader was the update that compared two states.
+
+    Backrec has no way to update itself (decision of 15.09.2026), so the list
+    has nobody left to answer and would be a second truth about the contents
+    that nobody keeps.
+    """
     root = make_repo(tmp_path)
 
     result = build(root, tmp_path / "out")
 
     with zipfile.ZipFile(result.archive) as bundle:
-        manifest = json.loads(
-            bundle.read(f"{paths.TOOL_NAME}/{release.MANIFEST_NAME}").decode("utf-8")
-        )
+        packed = bundle.namelist()
 
-    assert manifest["tool"] == paths.TOOL_NAME
-    assert manifest["version"] == "2026.09.1"
-    assert manifest["created"]
-    assert len(manifest["files"]) == len(result.entries)
+    assert not [name for name in packed if name.endswith(".json")]
 
 
 # --- Checks -------------------------------------------------------------------

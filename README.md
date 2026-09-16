@@ -38,9 +38,15 @@ Built with `customtkinter`, `sounddevice`, `soundcard` and `ffmpeg`.
 
 ## Getting started
 
-Double-click `Setup.cmd`. It bootstraps `uv`, builds the environment from
-`uv.lock`, migrates an existing `.env`, asks for the folders, fetches `ffmpeg`,
-runs the diagnosis, offers a desktop shortcut and offers to start.
+Double-click `Setup.cmd`. It bootstraps `uv`, stops a running window, builds the
+environment from `uv.lock`, migrates an existing `.env`, asks for the folders,
+fetches `ffmpeg`, runs the diagnosis, offers a desktop shortcut and offers to
+start.
+
+The stop is unconditional and reads no version: `scripts\win\bootstrap-uv.ps1`
+runs before every setup and replaces the package inside `.venv` with
+`--reinstall-package backrec` — the very environment a running window took its
+code from. The last step offers the start again.
 
 Afterwards, double-click the desktop icon — or `Start.cmd`.
 
@@ -63,28 +69,26 @@ All commands run through `python -m backrec <command>` or the generated
 | --- | --- | --- |
 | `setup [--unattended] [--start]` | The seven-step setup. Idempotent. | 0, else 1 or 2 |
 | `start` | Detached, windowless start via `pythonw.exe -m backrec` | 0, 1, **3** if already running |
-| `stop` | Writes a stop request, waits 30 s, then kills the tree | 0, else 1 |
+| `stop` | Writes a stop request, waits as long as the closing sequence reports work, then kills the tree | 0, else 1 |
 | `status` | Running, pid, start time, recording, folders, shortcut | 0 |
 | `doctor [--json] [--report]` | Read-only self check | 0, 1 on any failure |
 | `shortcut [--status] [--remove]` | The desktop icon | 0, else 1 |
 | `uninstall [--purge]` | Removes shortcut and environment, keeps recordings | 0, else 1 |
-| `update [<zip>] [--git]` | Applies a release archive, or pulls | 0, else 1 |
 | `logs [--follow]` | Opens the log folder, or tails the log | 0, else 1 |
 | `release [--output <dir>]` | Builds the distribution archive | 0, else 1 |
 | `about` | Version, folders, path of the guide, how to remove | 0 |
 
-`stop`, `update`, `doctor`, `uninstall` and `release` exist only as commands. The
-window carries no menu: the one thing a colleague has to reach from it is the
+`stop`, `doctor`, `uninstall` and `release` exist only as commands. The window
+carries no menu: the one thing a colleague has to reach from it is the
 diagnosis, and a click on the status line does that. There is deliberately no
-`Stop.cmd` or `Update.cmd` either: every file in the root folder is a question a
-colleague might ask.
+`Stop.cmd` either: every file in the root folder is a question a colleague might
+ask.
 
 ## Configuration
 
 Settings live in `%LOCALAPPDATA%\MemoSuite\Backrec\config.toml`, outside the
-repository, so an update that overwrites the folder loses nothing.
-`MEMOSUITE_HOME` moves the whole suite directory, `BACKREC_CONFIG` redirects the
-file alone.
+repository, so replacing the folder loses nothing. `MEMOSUITE_HOME` moves the
+whole suite directory, `BACKREC_CONFIG` redirects the file alone.
 
 ```toml
 recording_dir = 'D:\Aufnahmen\Recording'
@@ -130,8 +134,15 @@ possible moment for that news.
 - Closing the window during a recording runs the full closing sequence first, so
   nothing is lost. `stop` does the same through a request file, because console
   signals never reach a `pythonw` process.
+- While that sequence runs, the application beats a counter into
+  `state\finishing.active`, and `stop` extends its deadline for as long as the
+  counter keeps moving — a base deadline of 30 s without a beat, a ceiling of
+  300 s whatever happens. Mixing alone may take `MERGE_TIMEOUT_SECONDS`, so a
+  single fixed number could never cover a two-hour recording. If the tree does
+  get killed, the log and the command's own message name the recording folder
+  the raw takes stayed in.
 
-## Release and update
+## Release
 
 `backrec release` builds `Backrec-<version>.zip` into
 `%LOCALAPPDATA%\MemoSuite\releases\`. The file selection is an allow list over
@@ -140,26 +151,10 @@ never get in. Five checks abort the build hard: the working
 tree must be committed, the lock file must match `pyproject.toml`, no packed file
 may contain a user path or something that looks like an access key, and
 `LIES-MICH-ZUERST.txt` must obey all of its rules (encoding, line count, line
-length, vocabulary, the eight sections in order). There is no escape hatch — an
+length, vocabulary, the seven sections in order). There is no escape hatch — an
 archive that reaches a chat channel cannot be recalled.
 
-The archive carries `Backrec\` as its single top level plus a
-`release-manifest.json` listing every file with its SHA-256.
-
-One documented route, without Git: extract the new archive over the folder and
-double-click `Setup.cmd`. The setup notices the version change, stops a running
-instance, syncs, removes files the new release no longer has, runs the diagnosis
-and offers to start.
-
-`update <zip>` stays as a command and takes the careful path: the archive is
-staged next to the folder, every file checked against its checksum, and — if an
-instance is running — a detached PowerShell 5.1 helper outside the folder mirrors
-the files in and restarts. The folder keeps its name, so the desktop shortcut
-stays valid, and `.venv` stays where it is. The window used to offer this as a
-second route behind its gear menu; that menu is gone, and with it the route.
-
-`update --git` is the developer route: `git pull --ff-only`, sync, diagnosis. It
-refuses without a `.git` folder and points at the archive route.
+The archive carries `Backrec\` as its single top level and nothing else.
 
 ## Working with the neighbouring tools
 
@@ -181,7 +176,7 @@ not: it needs real audio devices.
 
 ## Project status
 
-Backrec is a small personal utility, shared as-is in case it's useful to others. It's intentionally minimal — no installer, no auto-update, no telemetry.
+Backrec is a small personal utility, shared as-is in case it's useful to others. It's intentionally minimal — no installer, no telemetry.
 
 ## Contributing
 

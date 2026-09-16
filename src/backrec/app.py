@@ -430,27 +430,35 @@ class RecorderApp(ctk.CTk):
 
     def _do_stop(self, then_exit: bool = False) -> None:
         outcome: Outcome | None = None
-        try:
-            if self.mic_recorder is not None:
-                self.mic_recorder.stop(timeout=5)
-            if self.system_recorder is not None:
-                self.system_recorder.stop(timeout=5)
 
-            if self.mic_recorder is not None:
-                self.mic_recorder.close_file()
-            if self.system_recorder is not None:
-                self.system_recorder.close_file()
+        # The whole sequence beats, not only its steps: a stop from outside has
+        # a deadline to keep, and the mixing in the middle is a single blocking
+        # call of up to two minutes. Without the beacon that deadline would run
+        # out over exactly the recording it was meant to protect (design D1, D3).
+        # The context manager also owns the end of the sign of life - success
+        # and failure leave through the same door.
+        with instance.FinishingBeacon():
+            try:
+                if self.mic_recorder is not None:
+                    self.mic_recorder.stop(timeout=5)
+                if self.system_recorder is not None:
+                    self.system_recorder.stop(timeout=5)
 
-            self._recording = False
-            instance.clear_recording()
-            outcome = self._merge_and_save()
-            message = outcome.status
+                if self.mic_recorder is not None:
+                    self.mic_recorder.close_file()
+                if self.system_recorder is not None:
+                    self.system_recorder.close_file()
 
-        except Exception:
-            message = "stop error"
-            self._recording = False
-            instance.clear_recording()
-            log.error("Unerwarteter Fehler in _do_stop()", exc_info=True)
+                self._recording = False
+                instance.clear_recording()
+                outcome = self._merge_and_save()
+                message = outcome.status
+
+            except Exception:
+                message = "stop error"
+                self._recording = False
+                instance.clear_recording()
+                log.error("Unerwarteter Fehler in _do_stop()", exc_info=True)
 
         self.after(0, lambda: self._finish_stop(message, then_exit=then_exit, outcome=outcome))
 
@@ -778,6 +786,7 @@ def _open_window() -> int:
         instance.clear_record()
         instance.clear_stop_request()
         instance.clear_recording()
+        instance.clear_finishing()
     return 0
 
 

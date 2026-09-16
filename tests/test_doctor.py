@@ -367,15 +367,15 @@ def test_a_log_folder_that_does_not_exist_yet_is_no_failure() -> None:
     assert check.level is doctor.Level.WARN
 
 
-def test_a_left_over_folder_of_a_superseded_version_warns_without_removing() -> None:
-    check = find(
-        doctor.evaluate(facts(stale_folders=(Path(r"C:\Backrec.old-2026.08.1"),))),
-        "state.stale_folders",
-    )
+def test_the_diagnosis_never_looks_at_a_neighbouring_folder() -> None:
+    """Backrec has no way to update itself (decision of 15.09.2026).
 
-    assert check.level is doctor.Level.WARN
-    assert "löschen" in check.next_step
-    assert "fasst ihn nicht an" in check.next_step
+    The two folder names this used to look for - a staging folder and a
+    superseded copy - came out of that procedure and cannot arise any more.
+    """
+    keys = {check.key for check in doctor.evaluate(facts())}
+
+    assert not [key for key in keys if "stale_folder" in key]
 
 
 def test_piled_up_reports_warn_with_their_number() -> None:

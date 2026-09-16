@@ -273,6 +273,62 @@ def test_closing_by_the_window_shows_a_failure(monkeypatch) -> None:
     assert stub._silent_failures is False
 
 
+# --- The sign of life of the closing sequence ---------------------------------
+
+
+class Closing:
+    """Only what `_do_stop` touches - the sign of life is what is under test."""
+
+    def __init__(self, merge) -> None:
+        self.mic_recorder = None
+        self.system_recorder = None
+        self._recording = True
+        self._mic_filepath = None
+        self._system_filepath = None
+        self._timestamp = None
+        self._merge = merge
+        self.scheduled: list[object] = []
+
+    def _merge_and_save(self) -> Outcome:
+        return self._merge()
+
+    def after(self, _delay, callback) -> None:
+        self.scheduled.append(callback)
+
+
+def test_the_closing_sequence_reports_work_while_it_mixes() -> None:
+    """The one moment the deadline has to survive (design D1, D3).
+
+    By then the recording marker is long gone - it is cleared before the mix,
+    which is why it could never carry this answer.
+    """
+    seen: list[tuple[int | None, bool]] = []
+
+    def mixing() -> Outcome:
+        seen.append((instance.finishing_beat(), instance.is_recording()))
+        return Outcome(ok=True, status="saved (merged)")
+
+    instance.mark_recording()
+    stub = Closing(mixing)
+
+    app.RecorderApp._do_stop(stub)
+
+    assert seen == [(0, False)], "Takt waehrend des Mischens, Aufnahmemerker bereits weg"
+    assert not instance.is_finishing(), "die Meldung endet mit der Sequenz"
+
+
+def test_the_sign_of_life_ends_after_a_failed_closing_sequence() -> None:
+    def boom() -> Outcome:
+        raise RuntimeError("kaputt")
+
+    stub = Closing(boom)
+
+    app.RecorderApp._do_stop(stub)
+
+    assert not instance.is_finishing()
+    assert stub.scheduled, "das Ende wird trotzdem eingeplant"
+
+
 # --- The request from outside -------------------------------------------------
 
 
